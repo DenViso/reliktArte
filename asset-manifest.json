@@ -1,17 +1,17 @@
 {
   "files": {
-    "main.css": "/static/css/main.2fcb15d4.css",
-    "main.js": "/static/js/main.558375c4.js",
-    "static/media/banner_1.png": "/static/media/banner_1.7964cd8e7115eb3ac41b.png",
-    "static/media/AboutUs.png": "/static/media/AboutUs.70694e55a331e28876ba.png",
-    "static/media/first-section-bg.jpg": "/static/media/first-section-bg.1e3453f6e9e018cd201f.jpg",
-    "static/media/logo.png": "/static/media/logo.e9e78fb7cd86978965e8.png",
-    "index.html": "/index.html",
-    "main.2fcb15d4.css.map": "/static/css/main.2fcb15d4.css.map",
-    "main.558375c4.js.map": "/static/js/main.558375c4.js.map"
+    "main.css": "/reliktArte/static/css/main.f1df7fcb.css",
+    "main.js": "/reliktArte/static/js/main.4cc78f42.js",
+    "static/media/banner_1.png": "/reliktArte/static/media/banner_1.7964cd8e7115eb3ac41b.png",
+    "static/media/AboutUs.png": "/reliktArte/static/media/AboutUs.70694e55a331e28876ba.png",
+    "static/media/first-section-bg.jpg": "/reliktArte/static/media/first-section-bg.1e3453f6e9e018cd201f.jpg",
+    "static/media/logo.png": "/reliktArte/static/media/logo.e9e78fb7cd86978965e8.png",
+    "index.html": "/reliktArte/index.html",
+    "main.f1df7fcb.css.map": "/reliktArte/static/css/main.f1df7fcb.css.map",
+    "main.4cc78f42.js.map": "/reliktArte/static/js/main.4cc78f42.js.map"
   },
   "entrypoints": [
-    "static/css/main.2fcb15d4.css",
-    "static/js/main.558375c4.js"
+    "static/css/main.f1df7fcb.css",
+    "static/js/main.4cc78f42.js"
   ]
 }
