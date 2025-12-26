@@ -1,0 +1,19 @@
+# Modules
+node_modules
+
+# Package locks
+yarn.lock
+pnpm-lock.yaml
+package-lock.json
+
+# Editor directories and files
+.vscode
+.DS_store
+
+# Builds
+dist
+build
+
+.env
+.env.dev
+.env.prod

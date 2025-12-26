@@ -1,0 +1,92 @@
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+
+# Translations
+*.mo
+*.pot
+
+# PEP 582; used by e.g. github.com/David-OConnor/pyflow
+__pypackages__/
+
+# SageMath parsed files
+*.sage.py
+
+# mkdocs documentation
+/site
+
+# Pyre type checker
+.pyre/
+
+# Media and static files
+# Note: In this [ESL-web] project we need to keep static directory in the repo
+media_files
+media
+static/*
+!static/default
+
+# JetBrains IDEs
+.idea
+
+# VSCODE
+.vscode
+
+# MAC
+.DS_Store
+*.DS_Store
+
+pg_hba.conf
+*.sqlite3
+
+# testing
+/coverage
+
+# misc
+.DS_Store
+../DS_Store
+.DS_Store?
+
+# supervisor
+*.pid
+
+# Markdown files with info
+INFO.md
