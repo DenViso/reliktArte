@@ -9,8 +9,10 @@ from ..config import settings
 def get_async_engine() -> AsyncEngine:
     # Конвертувати postgresql:// в postgresql+psycopg://
     db_url = str(settings.db.url)
+    print(f"ORIGINAL DB URL: {db_url}")  # DEBUG
     if db_url.startswith("postgresql://"):
         db_url = db_url.replace("postgresql://", "postgresql+psycopg://", 1)
+    print(f"CONVERTED DB URL: {db_url}")  # DEBUG
     
     return create_async_engine(
         db_url,
