@@ -14,7 +14,7 @@ from .helpers import DotenvListHelper, load_environment
 
 
 class CorsSettings(BaseSettings):
-    origins: str = Field(alias="cors_origins")
+    origins: str = Field(alias="cors_origins", default="http://localhost:3000,http://localhost:5173")
 
     @field_validator("origins")
     @classmethod
@@ -72,13 +72,13 @@ class CelerySettings(BaseSettings):
 
 class CacheSettings(BaseSettings):
     use_redis: bool = Field(alias="cache_use_redis", default=True)
-    redis_url: str = Field(alias="cache_redis_url", default="")
+    redis_url: str = Field(alias="cache_redis_url", default="redis://localhost:6379")
 
 
 class StaticFilesSettings(BaseSettings):
-    directory: str = Field(alias="static_dir")
-    max_file_size: int = Field(alias="static_max_file_size")
-    allowed_extensions: str = Field(alias="static_upload_allowed_extensions")
+    directory: str = Field(alias="static_dir", default="./static")
+    max_file_size: int = Field(alias="static_max_file_size", default=10485760)
+    allowed_extensions: str = Field(alias="static_upload_allowed_extensions", default=".jpg,.jpeg,.png,.gif,.webp,.pdf,.docx")
 
     @field_validator("allowed_extensions")
     @classmethod
@@ -115,9 +115,9 @@ class SMTPSettings(BaseSettings):
 
 
 class JWTSettings(BaseSettings):
-    access_token_expire: int = Field(alias="jwt_access_token_expire")
-    refresh_token_expire: int = Field(alias="jwt_refresh_token_expire")
-    algorithm: str = Field(alias="jwt_algorithm")
+    access_token_expire: int = Field(alias="jwt_access_token_expire", default=3600)
+    refresh_token_expire: int = Field(alias="jwt_refresh_token_expire", default=604800)
+    algorithm: str = Field(alias="jwt_algorithm", default="HS256")
 
 
 class FrontendSettings(BaseSettings):
@@ -128,15 +128,15 @@ class FrontendSettings(BaseSettings):
     )
     registration_confirm_path: str = Field(
         alias="frontend_registration_confirm_path",
-        default="",
+        default="/confirm",
     )
     password_reset_path: str = Field(
         alias="frontend_password_reset_path",
-        default="",
+        default="/reset-password",
     )
     email_change_confirm_path: str = Field(
         alias="frontend_email_change_confirm_path",
-        default="",
+        default="/confirm-email",
     )
 
     @property
@@ -146,7 +146,7 @@ class FrontendSettings(BaseSettings):
 
 class NovaPostSettings(BaseSettings):
     api_key: str = Field(alias="nova_post_api_key", default="")
-    enter_url: str = Field(alias="nova_post_enter_url", default="")
+    enter_url: str = Field(alias="nova_post_enter_url", default="https://api.novaposhta.ua/v2.0/json/")
 
 
 class Settings(BaseSettings):
@@ -156,7 +156,7 @@ class Settings(BaseSettings):
     app_domain: str = "localhost:8000"
     app_scheme: str = "http"
     debug: bool = True
-    secret_key: str = Field(default="changeme")
+    secret_key: str = Field(default="changeme-please-use-secure-key-in-production")
 
     # Cors
     cors: CorsSettings = Field(default_factory=CorsSettings)
