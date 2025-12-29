@@ -1,12 +1,11 @@
 from contextlib import asynccontextmanager
-
+from pathlib import Path
 from fastapi import FastAPI, APIRouter
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
 from .core.caching import init_caching
-
 from .user.router import router as user_router
 from .product.router import router as product_router
 from .order.router import router as order_router
@@ -31,6 +30,7 @@ app = FastAPI(
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
 )
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors.origins,
@@ -47,11 +47,17 @@ routers: list[APIRouter] = [
     nova_post_router,
     letter_router,
 ]
+
 for router in routers:
     app.include_router(router, prefix=f"/api/v{settings.app_version}")
 
-# Mount static directory
-app.mount(
-    f"/{settings.static.directory}",
-    StaticFiles(directory=settings.static.directory),
-)
+# Mount static directory (optional - only if directory exists)
+static_path = Path(settings.static.directory)
+if static_path.exists() and static_path.is_dir():
+    app.mount(
+        f"/{settings.static.directory}",
+        StaticFiles(directory=settings.static.directory),
+        name="static"
+    )
+else:
+    print(f"Warning: Static directory '{settings.static.directory}' not found, skipping static files")
