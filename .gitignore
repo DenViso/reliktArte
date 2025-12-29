@@ -90,3 +90,5 @@ pg_hba.conf
 
 # Markdown files with info
 INFO.md
+
+resource/Katalog/door/

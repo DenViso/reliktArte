@@ -2,8 +2,9 @@
 name = "relict-arte-api"
 version = "0.1.0"
 description = "Relict Arte API"
-authors = ["Oleg Kuzmenko <okuzmenko31us@gmail.com>"]
+authors = ["DenViso"]
 readme = "README.md"
+package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
