@@ -27,8 +27,8 @@ app = FastAPI(
     debug=settings.debug,
     version=str(settings.app_version),
     lifespan=lifespan,
-    docs_url="/docs",  # Завжди показувати docs
-    redoc_url="/redoc",  # Завжди показувати redoc
+    docs_url="/docs",
+redoc_url="/redoc",
 )
 
 app.add_middleware(
