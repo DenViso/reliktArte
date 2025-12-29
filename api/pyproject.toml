@@ -8,23 +8,34 @@ package-mode = false
 
 [tool.poetry.dependencies]
 python = "^3.11"
+
+# Web
 fastapi = "^0.111.0"
-sqlalchemy = "^2.0.30"
-pydantic-settings = "^2.2.1"
-alembic = "^1.13.1"
-psycopg = {version = "^3.1.19", extras = ["binary", "pool"]}
-celery = "^5.4.0"
 gunicorn = "^22.0.0"
-flower = "^2.0.1"
+
+# Database (ASYNC stack)
+sqlalchemy = "^2.0.30"
+asyncpg = "^0.30.0"
+alembic = "^1.13.1"
+pydantic-settings = "^2.2.1"
+
+# Background tasks
+celery = "^5.4.0"
 redis = "^5.0.4"
-redis-cli = "^1.0.1"
+flower = "^2.0.1"
+
+# Auth & security
 passlib = "^1.7.4"
-email-validator = "^2.1.1"
-fastapi-mail = "^1.4.1"
 python-jose = "^3.3.0"
+email-validator = "^2.1.1"
+
+# Utils
 requests = "^2.32.3"
 aiofiles = "^24.1.0"
 pytz = "^2024.2"
+
+# Mail
+fastapi-mail = "^1.4.1"
 
 
 [build-system]
