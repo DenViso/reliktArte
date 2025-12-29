@@ -32,22 +32,33 @@ class DBSettings(BaseSettings):
     url: str | None = Field(alias="db_url", default=None)
 
     @field_validator("url")
-    @classmethod
-    def assemble_db_url(
-        cls, v: str | None, validation_info: ValidationInfo
-    ) -> str:
-        if v is not None:
-            return v
-        values = validation_info.data
-        url = PostgresDsn.build(
-            scheme=values["scheme"],
-            username=values["user"],
-            password=values["password"],
-            host=values["host"],
-            port=values["port"],
-            path=values["name"],
-        )
-        return str(url)
+@classmethod
+def assemble_db_url(
+    cls, v: str | None, validation_info: ValidationInfo
+) -> str:
+    if v is not None:
+        return v
+    
+    # Спробувати отримати DATABASE_URL з environment
+    import os
+    database_url = os.getenv("DATABASE_URL")
+    if database_url:
+        # Railway надає postgres://, а нам потрібно postgresql://
+        if database_url.startswith("postgres://"):
+            database_url = database_url.replace("postgres://", "postgresql://", 1)
+        return database_url
+    
+    # Якщо DATABASE_URL немає, збираємо з окремих частин
+    values = validation_info.data
+    url = PostgresDsn.build(
+        scheme=values.get("scheme", "postgresql"),
+        username=values.get("user"),
+        password=values.get("password"),
+        host=values.get("host"),
+        port=values.get("port", 5432),
+        path=values.get("name", ""),
+    )
+    return str(url)
 
 
 class CelerySettings(BaseSettings):
