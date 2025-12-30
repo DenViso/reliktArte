@@ -56,4 +56,12 @@ RUN chmod +x /app/create_admin.sh
 # Run application as root user
 USER root
 
-CMD ["/app/run.sh"]
+# CMD ["/app/run.sh"]
+CMD [
+  "uvicorn",
+  "main:app",
+  "--host", "0.0.0.0",
+  "--port", "8000",
+  "--proxy-headers",
+  "--forwarded-allow-ips", "*"
+]
