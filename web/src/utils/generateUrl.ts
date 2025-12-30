@@ -1,20 +1,30 @@
-// src/utils/generateUrl.ts
 export const generateUrl = (targetUrl: string): string => {
-  // 1. Визначаємо базовий домен (без протоколу)
-  const baseFromEnv = process.env.REACT_APP_BACKEND_LINK || "reliktarte-production.up.railway.app";
-  const cleanBase = baseFromEnv.replace(/^https?:\/\//, "").replace(/\/+$/, "");
-
-  // 2. Визначаємо протокол
+  // 1. Пріоритет змінній з Vercel, якщо її немає — дефолт
+  const base = process.env.REACT_APP_BACKEND_LINK || "https://reliktarte-production.up.railway.app";
+  
+  // 2. Визначаємо правильний протокол
   const isLocal = window.location.hostname === "localhost";
-  const protocol = isLocal ? "http://" : "https://";
+  
+  // Якщо ми локально — використовуємо http, якщо на проді — СУВОРО https
+  let finalBase = base;
+  if (isLocal) {
+    finalBase = base.replace(/^https:\/\//, "http://");
+  } else {
+    finalBase = base.replace(/^http:\/\//, "https://");
+  }
 
-  // 3. Формуємо шлях API
   const API_PART = "api/v1";
+  
+  // 3. Формуємо шлях, уникаючи подвійних слешів
   let path = targetUrl.startsWith("/") ? targetUrl : `/${targetUrl}`;
   if (!path.includes(API_PART)) {
     path = `/${API_PART}${path}`;
   }
 
-  // 4. Склеюємо (URL конструктор сам прибере зайві слеші)
-  return `${protocol}${cleanBase}${path}`;
+  const url = `${finalBase.replace(/\/+$/, "")}${path}`;
+  
+  console.log("🌍 Environment:", isLocal ? "Local" : "Production");
+  console.log("🔗 Generated URL:", url);
+
+  return url;
 };
