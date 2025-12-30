@@ -36,11 +36,15 @@ fi
 
 # Database migration
 if grep -qi '^RUN_MIGRATIONS=True' .env; then
+    echo "Running Alembic migrations..."
     alembic upgrade head || { echo "Alembic upgrade failed. Exiting."; exit 1; }
 fi
 
 # Set the default message format for app mode
 APP_MODE_MESSAGE="Starting the application in %s mode..."
+
+# Default port if not set
+PORT=${APP_PORT:-8080}
 
 # Check the MODE environment variable
 if [ "$MODE" = "PROD" ]; then
@@ -50,15 +54,24 @@ if [ "$MODE" = "PROD" ]; then
 
 elif [ "$MODE" = "DEV" ]; then
     # Development or debug mode
-    # Check for debug mode in .env file
     if grep -qi '^DEBUG=True' .env; then
         printf "$APP_MODE_MESSAGE" "debug"
         # Start FastAPI application with Uvicorn in development mode
-        uvicorn src.main:app --reload --host 0.0.0.0 --port "$APP_PORT"
+        uvicorn src.main:app \
+            --host 0.0.0.0 \
+            --port "$PORT" \
+            --reload \
+            --proxy-headers \
+            --forwarded-allow-ips="*"
     else
         printf "$APP_MODE_MESSAGE" "production"
-        # Start FastAPI application with Gunicorn in more stable development mode
-        gunicorn src.main:app --workers 4 --worker-class uvicorn.workers.UvicornWorker --bind "0.0.0.0:$APP_PORT"
+        # Start FastAPI application with Gunicorn + Uvicorn workers
+        gunicorn src.main:app \
+            --workers 4 \
+            --worker-class uvicorn.workers.UvicornWorker \
+            --bind "0.0.0.0:$PORT" \
+            --proxy-headers \
+            --forwarded-allow-ips="*"
     fi
 else
     echo "No valid MODE set. Exiting..."
