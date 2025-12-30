@@ -12,6 +12,7 @@ export const generateUrl = (targetUrl: string) => {
   const url = `${
     process.env.REACT_APP_BACKEND_LINK || "https://reliktarte-production.up.railway.app"
   }${secondPart}`;
-
+console.log("🔍 ALL ENV:", process.env);
+console.log("🔍 BACKEND_LINK:", process.env.REACT_APP_BACKEND_LINK);
   return url;
 };
