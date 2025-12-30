@@ -39,24 +39,21 @@ app.add_middleware(RequestAuditMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    # allow_origins=[
-    #     "http://localhost:3000",
-    #     "https://relikt-c7kep6ss6-denvisos-projects.vercel.app",
-    # ],
-    allow_origins=["*"],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origins=["http://localhost:3000"],  # локально
+    allow_origin_regex=r"https://.*\.vercel\.app",  # всі фронтенди на vercel
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
 # HTTP -> HTTPS redirect middleware
 @app.middleware("http")
 async def redirect_https(request: Request, call_next):
+    if request.method == "OPTIONS":
+        return await call_next(request)  # пропускаємо preflight
     if request.url.scheme != "https":
         url = request.url.replace(scheme="https")
-        return RedirectResponse(url)
+        return RedirectResponse(url=str(url))
     response = await call_next(request)
     return response
 
