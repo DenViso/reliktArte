@@ -60,7 +60,7 @@ app.add_middleware(
     # return response
     
     
-    @app.middleware("http")
+@app.middleware("http")
 async def redirect_https(request: Request, call_next):
     if request.method == "OPTIONS":
         return await call_next(request)
