@@ -39,7 +39,9 @@ app.add_middleware(RequestAuditMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # локально
+    allow_origins=[ "http://localhost:5173",          # Vite local
+        "http://127.0.0.1:5173",                      # локально
+        "https://ТВІЙ-ФРОНТ.vercel.app",              # Vercel], 
     allow_origin_regex=r"https://.*\.vercel\.app",  # всі фронтенди на vercel
     allow_credentials=True,
     allow_methods=["*"],
@@ -47,15 +49,28 @@ app.add_middleware(
 )
 
 # HTTP -> HTTPS redirect middleware
-@app.middleware("http")
+# @app.middleware("http")
+# async def redirect_https(request: Request, call_next):
+    # if request.method == "OPTIONS":
+    #     return await call_next(request)  # пропускаємо preflight
+    # if request.url.scheme != "https":
+    #     url = request.url.replace(scheme="https")
+    #     return RedirectResponse(url=str(url))
+    # response = await call_next(request)
+    # return response
+    
+    
+    @app.middleware("http")
 async def redirect_https(request: Request, call_next):
     if request.method == "OPTIONS":
-        return await call_next(request)  # пропускаємо preflight
-    if request.url.scheme != "https":
+        return await call_next(request)
+
+    proto = request.headers.get("x-forwarded-proto")
+    if proto == "http":
         url = request.url.replace(scheme="https")
-        return RedirectResponse(url=str(url))
-    response = await call_next(request)
-    return response
+        return RedirectResponse(url=str(url), status_code=307)
+
+    return await call_next(request)
 
 
 # Include routers
