@@ -3,7 +3,8 @@ from pathlib import Path
 from fastapi import FastAPI, APIRouter
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-
+from .middlewares.request_logger import RequestAuditMiddleware
+app.add_middleware(RequestAuditMiddleware)
 
 
 
@@ -22,6 +23,13 @@ async def lifespan(app: FastAPI):  # noqa
     # Initialize the cache backend
     init_caching()
     yield
+
+    @app.middleware("http")
+async def redirect_https(request, call_next):
+    if request.url.scheme != "https":
+        url = request.url.replace(scheme="https")
+        return RedirectResponse(url)
+    return await call_next(request)
 
 
 # App configuration
