@@ -1,17 +1,15 @@
 export const generateUrl = (targetUrl: string) => {
     const part = "api/v1";
 
-    const isDomainNotEndsWithSlash = !(
-        process.env.REACT_APP_BACKEND_LINK || "http://localhost:8000"
-    )?.endsWith("/");
-    const validPart = `${isDomainNotEndsWithSlash ? "/" : ""}${
-        !targetUrl?.includes(part) ? part : ""
-    }${!targetUrl?.startsWith("/") ? "/" : ""}`;
+    // Беремо бекенд із змінної оточення або дефолтний HTTPS
+    const backend = (process.env.REACT_APP_BACKEND_LINK || "https://reliktarte-production.up.railway.app")
+        .replace(/^http:\/\//, "https://")  // примусово HTTPS
+        .replace(/\/+$/, ""); // прибрати зайві слеші в кінці
 
-    const secondPart = `${validPart}${targetUrl}`.replaceAll("//", "/");
-    const url = `${
-        process.env.REACT_APP_BACKEND_LINK || "http://localhost:8000"
-    }${secondPart}`;
+    // Формуємо правильний шлях
+    const pathPrefix = !targetUrl.includes(part) ? `/${part}` : "";
+    const path = `${pathPrefix}/${targetUrl}`.replace(/\/+/g, "/"); // прибираємо подвійні слеші
 
+    const url = `${backend}${path}`;
     return url;
 };
