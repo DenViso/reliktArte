@@ -41,7 +41,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[ "http://localhost:5173",          # Vite local
         "http://127.0.0.1:5173",                      # локально
-        "https://ТВІЙ-ФРОНТ.vercel.app",              # Vercel], 
+        "https://ТВІЙ-ФРОНТ.vercel.app", ]             # Vercel], 
     allow_origin_regex=r"https://.*\.vercel\.app",  # всі фронтенди на vercel
     allow_credentials=True,
     allow_methods=["*"],
