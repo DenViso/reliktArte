@@ -24,12 +24,6 @@ async def lifespan(app: FastAPI):  # noqa
     init_caching()
     yield
 
-    @app.middleware("http")
-async def redirect_https(request, call_next):
-    if request.url.scheme != "https":
-        url = request.url.replace(scheme="https")
-        return RedirectResponse(url)
-    return await call_next(request)
 
 
 # App configuration
@@ -42,6 +36,8 @@ app = FastAPI(
 redoc_url="/redoc",
 )
 
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -53,6 +49,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+    @app.middleware("http")
+async def redirect_https(request, call_next):
+    if request.url.scheme != "https":
+    url = request.url.replace(scheme="https")
+    return RedirectResponse(url)
+return await call_next(request)
 
 
 # Include routers
