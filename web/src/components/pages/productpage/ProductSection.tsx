@@ -129,14 +129,20 @@ const ProductSection = () => {
           <div className="product-info-main">
             <div className="product-info-main-image">
               {/* ВИПРАВЛЕННЯ: Тепер src завжди отримує повний URL через generateUrl */}
-              <img
+              {/* <img
                 key={currentPhoto}
                 src={currentPhoto ? generateUrl(currentPhoto) : noImage}
                 alt={product.name}
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = noImage;
                 }}
-              />
+              /> */}
+              <img 
+  src={currentPhoto ? `${generateUrl}${currentPhoto}` : noImage} 
+  alt={product?.name} 
+  className="product-info-main-image"
+  onError={(e) => { (e.target as HTMLImageElement).src = noImage; }}
+/>
               <p className="small black sku">Артикул: {product.sku}</p>
             </div>
 
