@@ -100,7 +100,7 @@ class ProductShow(MainSchema):
     sku: Optional[str] = None
     price: int
     description: Optional[ProductDescription] = None
-    have_glass: bool
+    have_glass: bool | None = False
     material_choice: bool
     type_of_platband_choice: bool
     orientation_choice: bool
