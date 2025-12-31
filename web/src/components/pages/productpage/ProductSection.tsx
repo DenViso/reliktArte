@@ -122,13 +122,13 @@ const ProductSection = () => {
         <div className="product-info">
           <div className="product-info-main">
             <div className="product-info-main-image">
+              {/* ВИПРАВЛЕННЯ: Тепер src завжди отримує повний URL через generateUrl */}
               <img
-                key={currentPhoto} // Додано для оновлення картинки при зміні стану
+                key={currentPhoto}
                 src={currentPhoto ? generateUrl(currentPhoto) : noImage}
                 alt={product.name}
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = noImage;
-                  console.error("Image load failed, switching to placeholder");
                 }}
               />
               <p className="small black sku">Артикул: {product.sku}</p>

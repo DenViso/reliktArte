@@ -75,7 +75,7 @@ for router in routers:
 
 
 # Mount static directory if exists
-static_path = Path(settings.static.directory)
+app.mount("/static", StaticFiles(directory="static"), name="static")
 if static_path.exists() and static_path.is_dir():
     app.mount(
         f"/{settings.static.directory}",
