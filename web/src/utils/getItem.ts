@@ -1,7 +1,7 @@
 import axios from "axios";
 import { generateUrl } from "./generateUrl";
 
-export const getItems = async (url_part: string, params?: any) => {
+export const getItem = async (url_part: string, params?: any) => {
   const validUrl = generateUrl(url_part);
 
   try {
