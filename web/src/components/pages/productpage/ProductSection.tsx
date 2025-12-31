@@ -10,7 +10,8 @@ import {
   ProductPhotoType,
   ProductType,
 } from "../../../types/productsRelatedTypes";
-import { getItem } from "../../../utils/getItem";
+import { getItems } from "../../../utils/getItems";
+// import { getItem } from "../../../utils/getItem";
 import { generateUrl } from "../../../utils/generateUrl";
 import { addCartItem } from "../../../utils/handleCart";
 import Button from "../../UI/Button";
@@ -39,7 +40,7 @@ const ProductSection = () => {
     const getCurrentProduct = async () => {
       try {
         if (!product) {
-          const newProduct = await getItem("api/v1/product/$id", {
+          const newProduct = await getItems("api/v1/product/$id", {
             id: product_id,
           });
           setProduct(newProduct);
@@ -59,14 +60,14 @@ const ProductSection = () => {
       if (product.category_id !== null) {
         if (allowedSizes.length < 1) {
           let currentSizes: any = [];
-          const currentCategory = await getItem(
+          const currentCategory = await getItems(
             `api/v1/product/category/${product.category_id}/`
           );
           const currentAllowedSizes = currentCategory.allowed_sizes;
 
           if (currentAllowedSizes?.length > 0) {
             for (const sizeId of currentAllowedSizes) {
-              const sizeObject = await getItem("api/v1/product/size/$id", {
+              const sizeObject = await getItems("api/v1/product/size/$id", {
                 id: sizeId,
               });
               if (sizeObject) currentSizes.push(sizeObject);
@@ -103,11 +104,11 @@ const ProductSection = () => {
     if (product) {
       data.product_id = product.id;
       if (data?.with_glass === false) delete data.glass_color_id;
-      await addCartItem(data);
-    }
+      await addCartItems(data);
+    }console.log(product_id, product);
   };
 
-console.log(product_id, product);
+
 
 
   return (

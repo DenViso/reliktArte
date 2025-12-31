@@ -1,5 +1,5 @@
 export const generateUrl = (targetUrl: string): string => {
-  const base = "https://reliktarte-production.up.railway.app" ;
+  const base = "https://reliktarte-production.up.railway.app";
   // || "process.env.REACT_APP_BACKEND_LINK
   const isLocal = window.location.hostname === "localhost";
   let finalBase = base.replace(/\/+$/, "");
