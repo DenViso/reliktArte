@@ -122,8 +122,10 @@ dmypy.json
 # Note: In this [ESL-web] project we need to keep static directory in the repo
 media_files
 media
-static/*
-!static/default
+# static/*
+# !static/default
+# Дозволяємо каталог
+!static/catalog/
 
 # JetBrains IDEs
 .idea
