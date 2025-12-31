@@ -75,12 +75,13 @@ for router in routers:
 
 
 # Mount static directory if exists
-app.mount("/static", StaticFiles(directory="static"), name="static")
-if static_path.exists() and static_path.is_dir():
-    app.mount(
-        f"/{settings.static.directory}",
-        StaticFiles(directory=settings.static.directory),
-        name="static",
-    )
-else:
-    print(f"Warning: Static directory '{settings.static.directory}' not found, skipping static files")
+try:
+    app.mount("/static", StaticFiles(directory="static"), name="static")
+    print("✅ Static files mounted successfully at /static")
+except Exception as e:
+    print(f"⚠️ Warning: Could not mount static directory: {e}")
+
+# Це важливо для Swagger/Docs, щоб вони розуміли, де шукати схеми
+@app.get("/", include_in_schema=False)
+async def root():
+    return RedirectResponse(url="/docs")
