@@ -3,6 +3,7 @@ export const generateUrl = (targetUrl: string): string => {
     REACT_APP_API_URL: process.env.REACT_APP_API_URL,
     NODE_ENV: process.env.NODE_ENV,
   });
+  
   if (!targetUrl) return "";
 
   // HARDCODED для продакшену

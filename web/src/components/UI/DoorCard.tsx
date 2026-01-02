@@ -292,15 +292,20 @@ const DoorCard = ({ product }: DoorCardProps) => {
             <p className="black small sku">Арт. {product.sku}</p>
 
             <div className="door-card-image-container">
-                <img
-                    src={
-                        product.photos?.find(
-                            (photo: ProductPhotoType) => photo.is_main
-                        )?.photo || noImage
-                    }
-                    alt={`door-${product.price}-${product.id}`}
-                />
-            </div>
+  <img
+    src={(() => {
+      const photo = product.photos?.find(
+        (photo: ProductPhotoType) => photo.is_main
+      )?.photo || noImage;
+      console.log("🖼️ DoorCard image:", { 
+        originalPhoto: photo,
+        generatedUrl: photo !== noImage ? generateUrl(photo) : noImage 
+      });
+      return photo !== noImage ? generateUrl(photo) : noImage;
+    })()}
+    alt={`door-${product.price}-${product.id}`}
+  />
+</div>
 
             <p className="black bold name" onClick={stopPropagation}>
                 {product.name}
