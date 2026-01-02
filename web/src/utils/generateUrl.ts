@@ -1,38 +1,38 @@
 export const generateUrl = (targetUrl: string): string => {
   if (!targetUrl) return "";
 
-  // ЗАВЖДИ використовуємо https для Railway, навіть з localhost
-  const base = "https://reliktarte-production.up.railway.app";
+  // Базовий URL Railway бекенду
+  const BASE_URL = process.env.REACT_APP_API_URL || "https://reliktarte-production.up.railway.app";
   
-  // 1. Очищуємо базу від слешів у кінці
-  const finalBase = base.replace(/\/+$/, "");
+  // Очищуємо базу від слешів у кінці
+  const cleanBase = BASE_URL.replace(/\/+$/, "");
 
-  // 2. Формуємо початковий шлях
+  // Нормалізуємо шлях - додаємо "/" на початку якщо немає
   let path = targetUrl.startsWith("/") ? targetUrl : `/${targetUrl}`;
 
-  // 3. Обробка статичних файлів (картинок)
+  // ОБРОБКА СТАТИЧНИХ ФАЙЛІВ (зображення, css, js)
   if (path.includes("/static/")) {
-  const cleanPath = path.replace("/api/v1", ""); 
-    return `${finalBase}${cleanPath}`.replace(/\/+/g, "/").replace(":/", "://");
+    // Видаляємо /api/v1 якщо випадково там опинилося
+    const staticPath = path.replace("/api/v1", "");
+    // Повертаємо повний URL до статичного файлу
+    return `${cleanBase}${staticPath}`.replace(/([^:]\/)\/+/g, "$1");
   }
 
-
-
-  // 4. Обробка API запитів
-  const API_PART = "/api/v1";
-  if (!path.includes(API_PART)) {
-    path = `${API_PART}${path}`;
+  // ОБРОБКА API ЗАПИТІВ
+  const API_PREFIX = "/api/v1";
+  
+  // Додаємо /api/v1 якщо немає
+  if (!path.includes(API_PREFIX)) {
+    path = `${API_PREFIX}${path}`;
   }
 
-  // 5. Фінальна збірка URL
-  let fullUrl = `${finalBase}${path}`.replace(/\/+/g, "/").replace(":/", "://");
-    // ... далі йде логіка для API, де ми додаємо слеш
-  if (!fullUrl.endsWith("/")) {
-    fullUrl += "/";
-}
-
-  // 6. ВИРІШАЛЬНИЙ КРОК: додаємо слеш у кінець, якщо його немає
-  // Це запобігає редиректу 307, який блокує CORS
+  // Збираємо фінальний URL
+  let fullUrl = `${cleanBase}${path}`;
+  
+  // Нормалізуємо подвійні слеші (крім https://)
+  fullUrl = fullUrl.replace(/([^:]\/)\/+/g, "$1");
+  
+  // Додаємо слеш у кінець для API запитів (уникаємо 307 redirect)
   if (!fullUrl.endsWith("/")) {
     fullUrl += "/";
   }
