@@ -1,15 +1,20 @@
-import axios from "axios";
-import { generateUrl } from "./generateUrl";
+import axios from 'axios';
 
-export const getItem = async (url_part: string, params?: any) => {
-  const validUrl = generateUrl(url_part);
-
+export const getItem = async (url: string, params?: any) => {
+  // Видаляємо зайві слеші
+  const cleanUrl = url.replace(/\/+$/, '');
+  
+  // Перевірка на undefined в URL
+  if (cleanUrl.includes('undefined')) {
+    console.error('❌ Invalid URL with undefined:', cleanUrl);
+    return null;
+  }
+  
   try {
-    // Axios сам додасть params як ?page=1 тощо
-    const response = await axios.get(validUrl, { params });
+    const response = await axios.get(cleanUrl, { params });
     return response.data;
   } catch (error) {
-    console.error("❌ getItems error:", error);
+    console.error('Error fetching item:', error);
     throw error;
   }
 };

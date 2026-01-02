@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
 from pathlib import Path
-
+import os
 from fastapi import FastAPI, APIRouter, Request
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
-import os
+
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
@@ -37,7 +37,6 @@ app = FastAPI(
 app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
 # 2. CORS ДРУГИМ - ДО RequestAuditMiddleware
-# Важливо: дозволяємо обидва протоколи для Railway
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://localhost:3000",
@@ -45,7 +44,6 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5173",
     "https://relikt.vercel.app",
     "https://relikt-arte.vercel.app",
-    # Додаємо HTTP версію Railway для внутрішніх запитів
     "http://reliktarte-production.up.railway.app",
     "https://reliktarte-production.up.railway.app",
 ]
@@ -81,15 +79,55 @@ for router in routers:
 
 
 # Mount static directory
-static_path = Path(__file__).parent / "static"
-if static_path.exists():
+# main.py знаходиться в /app/api/src/main.py
+# static знаходиться в /app/api/static
+# Тому потрібно піднятися на рівень вгору: parent.parent / "static"
+BASE_DIR = Path(__file__).resolve().parent  # /app/api/src
+STATIC_DIR = BASE_DIR.parent / "static"     # /app/api/static
+
+print(f"🔍 Looking for static at: {STATIC_DIR}")
+print(f"   Base dir: {BASE_DIR}")
+print(f"   Static exists: {STATIC_DIR.exists()}")
+
+if STATIC_DIR.exists() and STATIC_DIR.is_dir():
     try:
-        app.mount("/static", StaticFiles(directory=str(static_path)), name="static")
-        print(f"✅ Static files mounted at /static from {static_path}")
+        app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+        
+        # Підрахунок файлів для діагностики
+        files_count = sum(1 for f in STATIC_DIR.rglob("*") if f.is_file())
+        print(f"✅ Static files mounted from {STATIC_DIR}")
+        print(f"📁 Total files in static: {files_count}")
     except Exception as e:
-        print(f"⚠️ Warning: Could not mount static directory: {e}")
+        print(f"❌ Error mounting static: {e}")
 else:
-    print(f"⚠️ Static directory not found at {static_path}")
+    print(f"⚠️ Static directory not found at {STATIC_DIR}")
+    # Додаткова діагностика
+    if BASE_DIR.parent.exists():
+        contents = [item.name for item in BASE_DIR.parent.iterdir()]
+        print(f"   Contents of {BASE_DIR.parent}: {contents}")
+
+
+# Діагностичний endpoint (можна видалити після налагодження)
+@app.get("/debug/static-check")
+async def check_static():
+    """Діагностика статичних файлів"""
+    result = {
+        "main_py_location": str(Path(__file__).resolve()),
+        "base_dir": str(BASE_DIR),
+        "static_dir": str(STATIC_DIR),
+        "static_exists": STATIC_DIR.exists(),
+        "static_is_dir": STATIC_DIR.is_dir() if STATIC_DIR.exists() else False,
+    }
+    
+    if STATIC_DIR.exists() and STATIC_DIR.is_dir():
+        try:
+            files = [str(f.relative_to(STATIC_DIR)) for f in STATIC_DIR.rglob("*") if f.is_file()]
+            result["total_files"] = len(files)
+            result["sample_files"] = files[:20]  # Перші 20 файлів
+        except Exception as e:
+            result["error"] = str(e)
+    
+    return result
 
 
 @app.get("/", include_in_schema=False)

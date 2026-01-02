@@ -11,14 +11,12 @@ import {
   ProductType,
 } from "../../../types/productsRelatedTypes";
 import { getItems } from "../../../utils/getItems";
-// import { getItem } from "../../../utils/getItem";
 import { generateUrl } from "../../../utils/generateUrl";
 import { addCartItem } from "../../../utils/handleCart";
 import Button from "../../UI/Button";
 import DropDown from "../../UI/DropDown";
 import Loader from "../../UI/Loader";
 import Path from "../../UI/Path";
-
 
 const ProductSection = () => {
   const { product_id } = useParams();
@@ -36,43 +34,60 @@ const ProductSection = () => {
     dispatch(SetIsLoaded(value));
   };
 
+  // Завантаження продукту
   useEffect(() => {
     const getCurrentProduct = async () => {
       try {
-        if (!product) {
-          const newProduct = await getItems(`api/v1/product/$id${product_id}`);
+        if (!product && product_id) {
+          const newProduct = await getItems(`api/v1/product/${product_id}`);
           setProduct(newProduct);
         }
-      } catch {
+      } catch (error) {
+        console.error("Error loading product:", error);
         navigate(paths.buy);
       }
     };
     getCurrentProduct();
   }, [product_id, navigate, product]);
 
+  // Завантаження додаткових даних після отримання продукту
   useEffect(() => {
     if (!product) return;
+
     setIsLoaded(false);
 
     const getAllowedSizes = async () => {
-      if (product.category_id !== null) {
-        if (allowedSizes.length < 1) {
-          let currentSizes: any = [];
-          const currentCategory = await getItems(
-            `api/v1/product/category/${product.category_id}/`
-          );
-          const currentAllowedSizes = currentCategory.allowed_sizes;
+      // ВИПРАВЛЕННЯ: Перевірка на наявність category_id
+      if (!product.category_id) {
+        console.warn("Product category_id is undefined");
+        setIsLoaded(true);
+        return;
+      }
 
-          if (currentAllowedSizes?.length > 0) {
-            for (const sizeId of currentAllowedSizes) {
-              const sizeObject = await getItems("api/v1/product/size/$id", {
-                id: sizeId,
-              });
-              if (sizeObject) currentSizes.push(sizeObject);
-            }
+      // Уникаємо повторного завантаження
+      if (allowedSizes.length > 0) {
+        setIsLoaded(true);
+        return;
+      }
+
+      try {
+        let currentSizes: any = [];
+        const currentCategory = await getItems(
+          `api/v1/product/category/${product.category_id}/`
+        );
+
+        const currentAllowedSizes = currentCategory?.allowed_sizes;
+
+        if (currentAllowedSizes?.length > 0) {
+          for (const sizeId of currentAllowedSizes) {
+            const sizeObject = await getItems(`api/v1/product/size/${sizeId}`);
+            if (sizeObject) currentSizes.push(sizeObject);
           }
-          setAllowedSizes(currentSizes);
         }
+        setAllowedSizes(currentSizes);
+      } catch (error) {
+        console.error("Error loading allowed sizes:", error);
+      } finally {
         setIsLoaded(true);
       }
     };
@@ -84,12 +99,14 @@ const ProductSection = () => {
           product.photos.find((p: ProductPhotoType) => p.is_main) ||
           product.photos[0];
         setCurrentPhoto(mainPhoto?.photo || "");
+      } else {
+        setIsLoaded(true);
       }
     };
 
     getAllowedSizes();
     setUpPhotos();
-  }, [product, allowedSizes.length, setIsLoaded]);
+  }, [product]); // Видалено allowedSizes.length з залежностей
 
   const onChosen = (fieldName: string, value: any, field: string) => {
     const newPhoto = productPhotos.find((photo: any) => photo[field] === value);
@@ -104,11 +121,7 @@ const ProductSection = () => {
       if (data?.with_glass === false) delete data.glass_color_id;
       await addCartItem(data);
     }
-    
   };
-
-
-
 
   return (
     <div className="product-section">
@@ -126,21 +139,14 @@ const ProductSection = () => {
         <div className="product-info">
           <div className="product-info-main">
             <div className="product-info-main-image">
-              {/* ВИПРАВЛЕННЯ: Тепер src завжди отримує повний URL через generateUrl */}
-              {/* <img
-                key={currentPhoto}
+              <img
                 src={currentPhoto ? generateUrl(currentPhoto) : noImage}
-                alt={product.name}
+                alt={product?.name}
+                className="product-info-main-image"
                 onError={(e) => {
                   (e.target as HTMLImageElement).src = noImage;
                 }}
-              /> */}
-              <img 
-  src={currentPhoto ? `${generateUrl}${currentPhoto}` : noImage} 
-  alt={product?.name} 
-  className="product-info-main-image"
-  onError={(e) => { (e.target as HTMLImageElement).src = noImage; }}
-/>
+              />
               <p className="small black sku">Артикул: {product.sku}</p>
             </div>
 
@@ -169,7 +175,9 @@ const ProductSection = () => {
                     url: "api/v1/product/related/product_color/list/",
                     labelKey: "name",
                   }}
-                  onChosen={(name:string, val:any) => onChosen(name, val, "color_id")}
+                  onChosen={(name: string, val: any) =>
+                    onChosen(name, val, "color_id")
+                  }
                 />
 
                 {allowedSizes?.length > 0 && (
@@ -177,7 +185,9 @@ const ProductSection = () => {
                     label="розмір"
                     field="size_id"
                     options={{ value: allowedSizes, labelKey: "dimensions" }}
-                    onChosen={(name:string, val:any) => onChosen(name, val, "size_id")}
+                    onChosen={(name: string, val: any) =>
+                      onChosen(name, val, "size_id")
+                    }
                   />
                 )}
 
@@ -190,7 +200,7 @@ const ProductSection = () => {
                         { name: "Присутнє", value: true },
                         { name: "Відсутнє", value: false },
                       ]}
-                      onChosen={(name:string, val:any) =>
+                      onChosen={(name: string, val: any) =>
                         onChosen(name, val, "have_glass")
                       }
                     />
@@ -202,7 +212,7 @@ const ProductSection = () => {
                           url: "api/v1/product/related/product_glass_color/list/",
                           labelKey: "name",
                         }}
-                        onChosen={(name:string, val:any) =>
+                        onChosen={(name: string, val: any) =>
                           onChosen(name, val, "color_id")
                         }
                       />
