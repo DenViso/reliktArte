@@ -4,6 +4,8 @@ import { useNavigate } from "react-router-dom";
 import noImage from "../../assets/no_image.png";
 import { paths } from "../../router/paths";
 import "../../styles/components/UI/DoorCard.scss";
+import { generateUrl } from "../../utils/generateUrl";
+
 import {
     ProductPhotoType,
     ProductType,
