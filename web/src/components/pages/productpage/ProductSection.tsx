@@ -21,60 +21,116 @@ import { DEFAULT_DOOR_SIZES, CATEGORIES_WITH_DEFAULT_SIZES } from "../../../cons
 import { DEFAULT_DOOR_COLORS, CATEGORIES_WITH_DEFAULT_COLORS } from "../../../constants/defaultColors";
 import { DEFAULT_GLASS_COLORS, CATEGORIES_WITH_DEFAULT_GLASS_COLORS } from "../../../constants/defaultGlassColors";
 
-// Helper функція для визначення типу характеристики
-const getDetailLabel = (value: string, index: number): string | null => {
-  const lower = value.toLowerCase();
+// 🌟 УНІВЕРСАЛЬНА функція розпізнавання характеристик
+const getDetailLabel = (value: string, index: number, allDetails: Array<{value: string}>): string | null => {
+  const lower = value.toLowerCase().trim();
   
-  if (index === 0 || lower.includes('клас')) return "Модельний ряд";
+  // 🚫 ВИКЛЮЧЕННЯ (не показувати):
   
-  if (index === 1 || 
-      lower.includes('пвх') || 
+  // 1. Розміри (числа x числа)
+  if (/\d+\s*[xх×]\s*\d+/i.test(value)) return null;
+  
+  // 2. Колір скла (тільки якщо це останній або передостанній елемент)
+  const glassKeywords = ['сатин', 'матов', 'глянець', 'bronze', 'бронз', 'прозор', 'тонован', 'графіт', 'димч'];
+  const isLikelyGlassColor = glassKeywords.some(kw => lower.includes(kw));
+  
+  if (isLikelyGlassColor && index >= allDetails.length - 2) {
+    return null; // Це колір скла, не показуємо
+  }
+  
+  // ✅ РОЗПІЗНАВАННЯ (показувати з лейблами):
+  
+  // Модельний ряд (клас, артикул, модель)
+  if (lower.includes('клас') || 
+      lower.includes('арт') || 
+      lower.includes('модель') ||
+      index === 0) {
+    return "Модельний ряд";
+  }
+  
+  // Матеріал і покриття
+  if (lower.includes('пвх') || 
       lower.includes('шпон') || 
-      lower.includes('ламінат') || 
+      lower.includes('ламінат') ||
+      lower.includes('екошпон') ||
+      lower.includes('мдф') ||
+      // Породи дерева
       lower.includes('горіх') || 
       lower.includes('дуб') || 
       lower.includes('ясен') ||
       lower.includes('вільха') ||
       lower.includes('сосна') ||
-      lower.includes('бук')) return "Матеріал і колір";
+      lower.includes('бук') ||
+      lower.includes('венге') ||
+      lower.includes('махагон') ||
+      // Кольори
+      lower.includes('білий') ||
+      lower.includes('чорний') ||
+      lower.includes('сірий') ||
+      lower.includes('коричнев')) {
+    return "Матеріал і колір";
+  }
   
-  if (index === 2 || 
-      lower.includes('полотно') || 
+  // Тип виробу
+  if (lower.includes('полотно') || 
       lower.includes('двер') || 
-      lower.includes('виріб')) return "Виріб";
+      lower.includes('виріб') ||
+      lower.includes('рама') ||
+      lower.includes('короб')) {
+    return "Тип виробу";
+  }
   
-  if (index === 3 || /\d+x\d+/.test(value) || /\d+×\d+/.test(value)) return null;
-  
-  if (index === 4 || 
-      lower.includes('праве') || 
+  // Сторона відкривання
+  if (lower.includes('праве') || 
       lower.includes('ліве') ||
       lower.includes('правий') ||
-      lower.includes('лівий')) return "Стандартна сторона відкривання";
+      lower.includes('лівий') ||
+      lower.includes('правост') ||
+      lower.includes('лівост')) {
+    return "Стандартна сторона відкривання";
+  }
   
-  if (index === 5 || 
-      lower.includes('сатин') || 
-      lower.includes('матов') || 
-      lower.includes('глянець') ||
-      lower.includes('bronze') ||
-      lower.includes('бронз')) return null;
+  // Оздоблення/Фактура (якщо це НЕ колір скла)
+  if (!isLikelyGlassColor && (
+      lower.includes('глянц') ||
+      lower.includes('текстур') ||
+      lower.includes('рельєф') ||
+      lower.includes('шагрен'))) {
+    return "Оздоблення";
+  }
   
+  // Конструкція
+  if (lower.includes('суцільн') ||
+      lower.includes('філенч') ||
+      lower.includes('каркас') ||
+      lower.includes('щитов')) {
+    return "Конструкція";
+  }
+  
+  // Якщо нічого не підійшло - приховуємо
   return null;
 };
 
+// Перевірка чи це розмір
 const isSize = (value: string): boolean => {
-  return /\d+x\d+/.test(value) || /\d+×\d+/.test(value);
+  return /\d+\s*[xх×]\s*\d+/i.test(value);
 };
 
-const isGlassColor = (value: string, index: number): boolean => {
+// Перевірка чи це колір скла
+const isGlassColor = (value: string, index: number, allDetails: Array<{value: string}>): boolean => {
   const lower = value.toLowerCase();
-  return index === 5 || 
-         lower.includes('сатин') || 
-         lower.includes('матов') || 
-         lower.includes('глянець') ||
-         lower.includes('bronze') ||
-         lower.includes('бронз') ||
-         lower.includes('прозор') ||
-         lower.includes('тонован');
+  
+  const keywords = [
+    'сатин', 'матов', 'глянець', 'bronze', 'бронз', 
+    'прозор', 'тонован', 'графіт', 'димч'
+  ];
+  
+  const hasGlassKeyword = keywords.some(kw => lower.includes(kw));
+  
+  // Це колір скла якщо:
+  // 1. Містить ключові слова скла
+  // 2. І знаходиться в кінці списку (останній або передостанній елемент)
+  return hasGlassKeyword && index >= allDetails.length - 2;
 };
 
 const ProductSection = () => {
@@ -88,7 +144,7 @@ const ProductSection = () => {
   const [currentValues, setCurrentValues] = useState<any>({});
   const [allowedSizes, setAllowedSizes] = useState<any>([]);
   const [availableColors, setAvailableColors] = useState<any>([]);
-  const [availableGlassColors, setAvailableGlassColors] = useState<any>([]); // ✅ ДОДАНО
+  const [availableGlassColors, setAvailableGlassColors] = useState<any>([]);
   const dispatch = useDispatch();
 
   const setIsLoaded = (value: boolean) => {
@@ -98,39 +154,35 @@ const ProductSection = () => {
   // Відслідковування вибраних значень
   const selectedSizeId = watch('size_id');
   const selectedColorId = watch('color_id');
-  const selectedGlassColorId = watch('glass_color_id'); // ✅ ДОДАНО
-  const withGlass = watch('with_glass'); // ✅ ДОДАНО
+  const selectedGlassColorId = watch('glass_color_id');
+  const withGlass = watch('with_glass');
   
   const selectedSize = allowedSizes.find((size: any) => size.id === selectedSizeId);
   const selectedColor = availableColors.find((color: any) => color.id === selectedColorId);
-  const selectedGlassColor = availableGlassColors.find((color: any) => color.id === selectedGlassColorId); // ✅ ДОДАНО
+  const selectedGlassColor = availableGlassColors.find((color: any) => color.id === selectedGlassColorId);
 
   const productDetails = (product?.description as any)?.details as Array<{
     value: string;
   }> | undefined;
 
-  const filteredDetails = productDetails?.filter((detail, index) => {
-    const label = getDetailLabel(detail.value, index);
-    return label !== null && !isSize(detail.value) && !isGlassColor(detail.value, index);
+  // ✅ ОНОВЛЕНО: Передаємо весь масив для контексту
+  const filteredDetails = productDetails?.map((detail, originalIndex) => ({
+    detail,
+    originalIndex
+  })).filter(({ detail, originalIndex }) => {
+    if (!productDetails) return false;
+    const label = getDetailLabel(detail.value, originalIndex, productDetails);
+    return label !== null && 
+           !isSize(detail.value) && 
+           !isGlassColor(detail.value, originalIndex, productDetails);
   });
 
   // Визначення наявності скла
   const hasGlassFromDetails = productDetails?.some((detail, index) => 
-    isGlassColor(detail.value, index)
+    isGlassColor(detail.value, index, productDetails)
   );
 
   const productHasGlass = product?.have_glass || hasGlassFromDetails;
-
-  // Діагностика
-  useEffect(() => {
-    if (product && productDetails) {
-      console.log("🔍 DEBUG Glass:");
-      console.log("  - product.have_glass:", product.have_glass);
-      console.log("  - hasGlassFromDetails:", hasGlassFromDetails);
-      console.log("  - productHasGlass:", productHasGlass);
-      console.log("  - availableGlassColors:", availableGlassColors);
-    }
-  }, [product, productDetails, hasGlassFromDetails, productHasGlass, availableGlassColors]);
 
   // Завантаження продукту
   useEffect(() => {
@@ -162,7 +214,7 @@ const ProductSection = () => {
 
     const loadProductData = async () => {
       try {
-        // ✅ Завантаження кольорів дверей
+        // Завантаження кольорів дверей
         if (product.category_id && availableColors.length === 0) {
           if (CATEGORIES_WITH_DEFAULT_COLORS.includes(product.category_id)) {
             console.log("🎨 Using default door colors");
@@ -177,7 +229,7 @@ const ProductSection = () => {
           }
         }
 
-        // ✅ ДОДАНО: Завантаження кольорів скла
+        // Завантаження кольорів скла
         if (product.category_id && availableGlassColors.length === 0) {
           if (CATEGORIES_WITH_DEFAULT_GLASS_COLORS.includes(product.category_id)) {
             console.log("🔷 Using default glass colors");
@@ -326,16 +378,18 @@ const ProductSection = () => {
                 <p className="upper black mid">{product.name}</p>
                 <p className="black small">{product?.description?.text}</p>
 
+                {/* ✅ УНІВЕРСАЛЬНЕ РОЗПІЗНАВАННЯ */}
                 {filteredDetails && filteredDetails.length > 0 && (
                   <div className="product-details">
                     <h3 className="details-title">Характеристики</h3>
                     <div className="details-list">
-                      {filteredDetails.map((detail, index) => {
-                        const label = getDetailLabel(detail.value, index);
+                      {filteredDetails.map(({ detail, originalIndex }, displayIndex) => {
+                        if (!productDetails) return null;
+                        const label = getDetailLabel(detail.value, originalIndex, productDetails);
                         if (!label) return null;
                         
                         return (
-                          <div key={index} className="detail-item">
+                          <div key={displayIndex} className="detail-item">
                             <span className="detail-label">{label}:</span>
                             <span className="detail-value">{detail.value}</span>
                           </div>
@@ -397,7 +451,7 @@ const ProductSection = () => {
                       }
                     />
                     
-                    {/* ✅ ОНОВЛЕНО: Колір скла з динамічним лейблом */}
+                    {/* Колір скла з динамічним лейблом */}
                     {withGlass && availableGlassColors.length > 0 && (
                       <DropDown
                         label={selectedGlassColor ? selectedGlassColor.name : "колір скла"}
