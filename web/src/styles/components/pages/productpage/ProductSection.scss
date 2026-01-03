@@ -44,6 +44,34 @@
                     text-align: center;
                     transform: translateX(-50%);
                 }
+
+                // ✅ ДОДАНО: Стилі для галереї мініатюр
+                .photo-gallery {
+                    display: flex;
+                    gap: 10px;
+                    margin-top: 15px;
+                    flex-wrap: wrap;
+                    justify-content: center;
+
+                    .thumbnail {
+                        width: 80px;
+                        height: 80px;
+                        object-fit: cover;
+                        cursor: pointer;
+                        border: 2px solid transparent;
+                        border-radius: 4px;
+                        transition: all 0.3s ease;
+
+                        &:hover {
+                            border-color: #ccc;
+                            transform: scale(1.05);
+                        }
+
+                        &.active {
+                            border-color: #000;
+                        }
+                    }
+                }
             }
 
             &-description {
@@ -109,6 +137,72 @@
             }
         }
     }
+
+    // ✅ ДОДАНО: Стилі для блоку "Характеристики"
+    &-details {
+        margin-top: 20px;
+
+        .details-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: var(--black, #000);
+            text-transform: uppercase;
+        }
+
+        .details-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .detail-item {
+            display: flex;
+            gap: 10px;
+            font-size: 14px;
+            line-height: 1.6;
+
+            .detail-label {
+                font-weight: 600;
+                min-width: 130px;
+                color: var(--black, #000);
+            }
+
+            .detail-value {
+                color: #666;
+                flex: 1;
+            }
+        }
+    }
+
+    // ✅ ДОДАНО: Стилі для блоку "Оздоблення"
+    &-finishing {
+        margin-top: 20px;
+        padding: 15px;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        border-left: 4px solid var(--black, #000);
+
+        .finishing-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: var(--black, #000);
+            text-transform: uppercase;
+        }
+
+        .finishing-text {
+            font-size: 14px;
+            line-height: 1.6;
+            color: #666;
+
+            strong {
+                font-weight: 600;
+                color: var(--black, #000);
+                margin-right: 5px;
+            }
+        }
+    }
 }
 
 @media (max-width: 900px) {
@@ -126,6 +220,14 @@
 
                     img {
                         max-width: 100%;
+                    }
+
+                    // Галерея на планшетах
+                    .photo-gallery {
+                        .thumbnail {
+                            width: 60px;
+                            height: 60px;
+                        }
                     }
                 }
 
@@ -154,12 +256,59 @@
                 }
             }
         }
+
+        // ✅ ДОДАНО: Адаптація характеристик для планшетів
+        &-details {
+            .detail-item {
+                .detail-label {
+                    min-width: 100px;
+                }
+            }
+        }
     }
 }
 
 @media (max-width: 480px) {
     .product-info-main-description-principal {
         width: 100%;
+    }
+
+    // ✅ ДОДАНО: Адаптація для мобільних
+    .product {
+        &-details {
+            .detail-item {
+                flex-direction: column;
+                gap: 5px;
+
+                .detail-label {
+                    min-width: auto;
+                    font-weight: 700;
+                }
+            }
+        }
+
+        &-finishing {
+            padding: 12px;
+
+            .finishing-title {
+                font-size: 16px;
+            }
+
+            .finishing-text {
+                font-size: 13px;
+            }
+        }
+
+        &-info-main-image {
+            .photo-gallery {
+                gap: 8px;
+
+                .thumbnail {
+                    width: 50px;
+                    height: 50px;
+                }
+            }
+        }
     }
 }
 

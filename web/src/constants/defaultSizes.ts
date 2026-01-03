@@ -2,27 +2,33 @@
 export const DEFAULT_DOOR_SIZES = [
   {
     id: 1,
-    dimensions: "2000x800",
-    width: 800,
+    dimensions: "2000x600х40",
+    width: 600,
     height: 2000,
   },
   {
     id: 2,
-    dimensions: "2000x900",
-    width: 900,
+    dimensions: "2000x700х40",
+    width: 700,
     height: 2000,
   },
   {
     id: 3,
-    dimensions: "2100x800",
+    dimensions: "2000x800х40",
     width: 800,
-    height: 2100,
+    height: 2000,
   },
   {
     id: 4,
-    dimensions: "2100x900",
+    dimensions: "2000x900х40",
     width: 900,
-    height: 2100,
+    height: 2000,
+  },
+  {
+    id: 5,
+    dimensions: "нестандартний",
+    width: 0,
+    height: 0,
   },
 ];
 
