@@ -2,6 +2,7 @@
   "name": "web",
   "version": "1.0.0",
   "private": true,
+  "proxy": "https://reliktarte-production.up.railway.app",
   "dependencies": {
     "@reduxjs/toolkit": "^2.2.5",
     "@testing-library/jest-dom": "^5.14.1",

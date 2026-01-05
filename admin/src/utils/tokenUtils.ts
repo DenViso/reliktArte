@@ -76,6 +76,21 @@ export const registerUser = async (data: any) => {
         }));
 };
 
+// export const singInAccount = async (data: any) => {
+//     return await axios
+//         .post(generateUrl("api/v1/user/auth?as_admin=true"), {
+//             ...data,
+//         })
+//         .then((res) => {
+//             setAccessToken(res.data.access_token);
+//             setRefreshToken(res.data.refresh_token);
+
+//             return true;
+//         })
+//         .catch((err) => ({
+//             error: err.response.data.detail || "Щось пішло не так.",
+//         }));
+// };
 export const singInAccount = async (data: any) => {
     return await axios
         .post(generateUrl("api/v1/user/auth?as_admin=true"), {
@@ -85,9 +100,10 @@ export const singInAccount = async (data: any) => {
             setAccessToken(res.data.access_token);
             setRefreshToken(res.data.refresh_token);
 
-            return true;
+            // ✅ ВИПРАВЛЕНО: Повертаємо весь response
+            return res.data;
         })
         .catch((err) => ({
-            error: err.response.data.detail || "Щось пішло не так.",
+            error: err.response?.data?.detail || "Щось пішло не так.",
         }));
 };

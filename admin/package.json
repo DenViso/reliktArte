@@ -1,6 +1,7 @@
 {
   "name": "admin",
   "version": "1.0.0",
+  "proxy": "https://reliktarte-production.up.railway.app",
   "private": true,
   "dependencies": {
     "@reduxjs/toolkit": "^2.2.5",

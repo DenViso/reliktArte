@@ -40,6 +40,8 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://localhost:3000",
+    "http://localhost:3001",  # ← ДОДАЙТЕ ЦЕ ДЛЯ АДМІНКИ
+    "https://localhost:3001",  # ← ДОДАЙТЕ ЦЕ ДЛЯ АДМІНКИ
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "https://relikt.vercel.app",
