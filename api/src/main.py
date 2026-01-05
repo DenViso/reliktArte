@@ -44,7 +44,7 @@ ALLOWED_ORIGINS = [
     "https://localhost:3001",  # ← ДОДАЙТЕ ЦЕ ДЛЯ АДМІНКИ
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    "https://relikt.vercel.app",
+    # "https://relikt.vercel.app",
     "https://relikt-arte.vercel.app",
     "http://reliktarte-production.up.railway.app",
     "https://reliktarte-production.up.railway.app",
