@@ -123,9 +123,12 @@ dmypy.json
 media_files
 media
 # static/*
+# static/*
+!static/default
+!static/catalog/
 # !static/default
 # Дозволяємо каталог
-!static/catalog/
+# !static/catalog/
 
 # JetBrains IDEs
 .idea
