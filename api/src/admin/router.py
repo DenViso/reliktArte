@@ -69,7 +69,7 @@ def extract_docx_content(file_path: Path):
 
 async def import_doors_task(session: AsyncSession, category_id: int) -> Dict[str, int]:
     """Імпорт дверей"""
-    catalog_path = Path("static/catalog/door")
+    catalog_path = Path("api/static/catalog/door")
     if not catalog_path.exists():
         return {"imported": 0, "skipped": 0, "error": "Каталог не знайдено"}
     
@@ -164,7 +164,7 @@ async def import_doors_task(session: AsyncSession, category_id: int) -> Dict[str
 
 async def import_mouldings_task(session: AsyncSession, category_id: int) -> Dict[str, int]:
     """Імпорт лиштв"""
-    catalog_path = Path("static/catalog/mouldings")
+    catalog_path = Path("api/static/catalog/mouldings")
     if not catalog_path.exists():
         return {"imported": 0, "skipped": 0, "error": "Каталог не знайдено"}
     
