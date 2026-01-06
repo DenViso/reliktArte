@@ -1,8 +1,8 @@
-﻿[build]
+[build]
 builder = "nixpacks"
 buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-startCommand = "bash -c 'cd api && alembic upgrade head && cd .. && uvicorn api.src.main:app --host 0.0.0.0 --port $PORT'"
+startCommand = "cd api && alembic upgrade head && cd .. && uvicorn api.src.main:app --host 0.0.0.0 --port $PORT"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
