@@ -2,7 +2,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 import os
 from fastapi import FastAPI, APIRouter, Request
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from fastapi.middleware.cors import CORSMiddleware
@@ -40,15 +40,13 @@ app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "https://localhost:3000",
-    "http://localhost:3001",  # ← ДОДАЙТЕ ЦЕ ДЛЯ АДМІНКИ
-    "https://localhost:3001",  # ← ДОДАЙТЕ ЦЕ ДЛЯ АДМІНКИ
+    "http://localhost:3001",
+    "https://localhost:3001",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
-    # "https://relikt.vercel.app",
     "https://relikt-arte.vercel.app",
     "http://reliktarte-production.up.railway.app",
     "https://reliktarte-production.up.railway.app",
-    # "https://relikt.netlify.app",
 ]
 
 print(f"🔧 CORS Configuration:")
@@ -68,6 +66,26 @@ app.add_middleware(
 app.add_middleware(RequestAuditMiddleware)
 
 
+# Health Check Endpoints (ПЕРЕД роутерами!)
+@app.get("/", include_in_schema=False)
+async def root():
+    """Root endpoint - redirects to docs"""
+    return RedirectResponse(url="/docs")
+
+
+@app.get("/health", include_in_schema=False)
+async def health_check():
+    """Health check endpoint для Railway"""
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "healthy",
+            "service": "Relikt Arte API",
+            "version": str(settings.app_version)
+        }
+    )
+
+
 # Include routers
 routers: list[APIRouter] = [
     user_router,
@@ -82,9 +100,6 @@ for router in routers:
 
 
 # Mount static directory
-# main.py знаходиться в /app/api/src/main.py
-# static знаходиться в /app/api/static
-# Тому потрібно піднятися на рівень вгору: parent.parent / "static"
 BASE_DIR = Path(__file__).resolve().parent  # /app/api/src
 STATIC_DIR = BASE_DIR.parent / "static"     # /app/api/static
 
@@ -104,13 +119,12 @@ if STATIC_DIR.exists() and STATIC_DIR.is_dir():
         print(f"❌ Error mounting static: {e}")
 else:
     print(f"⚠️ Static directory not found at {STATIC_DIR}")
-    # Додаткова діагностика
     if BASE_DIR.parent.exists():
         contents = [item.name for item in BASE_DIR.parent.iterdir()]
         print(f"   Contents of {BASE_DIR.parent}: {contents}")
 
 
-# Діагностичний endpoint (можна видалити після налагодження)
+# Діагностичний endpoint
 @app.get("/debug/static-check")
 async def check_static():
     """Діагностика статичних файлів"""
@@ -126,13 +140,8 @@ async def check_static():
         try:
             files = [str(f.relative_to(STATIC_DIR)) for f in STATIC_DIR.rglob("*") if f.is_file()]
             result["total_files"] = len(files)
-            result["sample_files"] = files[:20]  # Перші 20 файлів
+            result["sample_files"] = files[:20]
         except Exception as e:
             result["error"] = str(e)
     
     return result
-
-
-@app.get("/", include_in_schema=False)
-async def root():
-    return RedirectResponse(url="/docs")
