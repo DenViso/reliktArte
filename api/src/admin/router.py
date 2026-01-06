@@ -2,7 +2,7 @@
 Адміністративні ендпоінти для управління каталогом
 ВАЖЛИВО: Використовуйте тільки в безпечному середовищі!
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, BackgroundTasks, Depends
 from fastapi.responses import JSONResponse
 from pathlib import Path
 import asyncio
@@ -307,7 +307,10 @@ async def run_import_catalog(uow: UnitOfWork):
 
 
 @router.post("/import-catalog")
-async def trigger_catalog_import(background_tasks: BackgroundTasks, uow: UnitOfWork):
+async def trigger_catalog_import(
+    background_tasks: BackgroundTasks,
+    uow: UnitOfWork = Depends()
+):
     """
     Запустити імпорт каталогу
     
