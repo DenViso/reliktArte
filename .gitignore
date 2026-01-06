@@ -63,6 +63,7 @@ media_files
 media
 static/*
 !static/default
+!static/catalog
 
 # JetBrains IDEs
 .idea
