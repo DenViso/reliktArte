@@ -48,6 +48,8 @@ ALLOWED_ORIGINS = [
     "https://relikt-arte.vercel.app",
     "http://reliktarte-production.up.railway.app",
     "https://reliktarte-production.up.railway.app",
+    "https://relikt.netlify.app",
+    "https://relikt.vercel.app",
 ]
 
 print(f"🔧 CORS Configuration:")
