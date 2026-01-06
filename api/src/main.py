@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from fastapi.middleware.cors import CORSMiddleware
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
+from .admin.router import router as admin_router  # ← Додайте цей імпорт
 
 from .middlewares.request_logger import RequestAuditMiddleware
 from .core.config import settings
@@ -93,6 +94,7 @@ routers: list[APIRouter] = [
     order_router,
     nova_post_router,
     letter_router,
+    admin_router,  # ← Додайте сюди
 ]
 
 for router in routers:
