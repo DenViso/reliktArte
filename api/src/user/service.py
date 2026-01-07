@@ -52,11 +52,12 @@ from .schemas import (
     UserPasswordChange,
 )
 from .enums import AuthTokenType
-from .tasks import (
-    send_registration_email,
-    send_email_change_confirmation_email,
-    send_password_reset_email,
-)
+# ЗАКОМЕНТОВАНО: Celery tasks не працюють без worker
+# from .tasks import (
+#     send_registration_email,
+#     send_email_change_confirmation_email,
+#     send_password_reset_email,
+# )
 from .mixins import JWTTokensMixin
 
 
@@ -106,62 +107,35 @@ class UserService(JWTTokensMixin, BaseService):
             updated_at=obj.updated_at,
         )
 
-    # async def create_user(
-    #     self,
-    #     data: UserCreate | AdminUserCreate,
-    #     send_confirmation_email: bool = False,
-    # ) -> UserShow:
-    #     try:
-    #         async with self.uow:
-    #             if await self.uow.user.exists_by_email(data.email):
-    #                 raise UserByEmailAlreadyExistsException(data.email)
-    #             user = await self.uow.user.create(obj_in=data)
-    #             await self.uow.add(user)
-    #             if send_confirmation_email:
-    #                 # Send confirmation email
-    #                 token_data = await AuthTokenService(
-    #                     self.uow
-    #                 ).create_auth_token(
-    #                     AuthTokenCreate(
-    #                         token_type=AuthTokenType.REGISTRATION_CONFIRM,
-    #                         owner_email=user.email,
-    #                     )
-    #                 )
-    #                 send_registration_email.delay(token_data.model_dump_json())
-    #             await self.uow.commit()
-    #             return await self.get_show_scheme(user)
-    #     except SQLAlchemyError as e:
-    #         log.exception(e)
-    #         raise ObjectCreateException("User")
-    
     async def create_user(
         self,
         data: UserCreate | AdminUserCreate,
         send_confirmation_email: bool = False,
-) -> UserShow:
-    try:
-        async with self.uow:
-            if await self.uow.user.exists_by_email(data.email):
-                raise UserByEmailAlreadyExistsException(data.email)
-            user = await self.uow.user.create(obj_in=data)
-            await self.uow.add(user)
-            if send_confirmation_email:
-                # Send confirmation email
-                token_data = await AuthTokenService(
-                    self.uow
-                ).create_auth_token(
-                    AuthTokenCreate(
-                        token_type=AuthTokenType.REGISTRATION_CONFIRM,
-                        owner_email=user.email,
+    ) -> UserShow:
+        try:
+            async with self.uow:
+                if await self.uow.user.exists_by_email(data.email):
+                    raise UserByEmailAlreadyExistsException(data.email)
+                user = await self.uow.user.create(obj_in=data)
+                await self.uow.add(user)
+                if send_confirmation_email:
+                    # Send confirmation email
+                    token_data = await AuthTokenService(
+                        self.uow
+                    ).create_auth_token(
+                        AuthTokenCreate(
+                            token_type=AuthTokenType.REGISTRATION_CONFIRM,
+                            owner_email=user.email,
+                        )
                     )
-                )
-                # send_registration_email.delay(token_data.model_dump_json())  це тимчасово закоментував
-                log.info(f"Registration token created for {user.email}: {token_data.token}")
-            await self.uow.commit()
-            return await self.get_show_scheme(user)
-    except SQLAlchemyError as e:
-        log.exception(e)
-        raise ObjectCreateException("User")
+                    # ЗАКОМЕНТОВАНО: Celery task
+                    # send_registration_email.delay(token_data.model_dump_json())
+                    log.info(f"Registration token created for {user.email}: {token_data.token}")
+                await self.uow.commit()
+                return await self.get_show_scheme(user)
+        except SQLAlchemyError as e:
+            log.exception(e)
+            raise ObjectCreateException("User")
 
     async def confirm_registration(self, token: str) -> bool:
         try:
@@ -417,9 +391,11 @@ class UserService(JWTTokensMixin, BaseService):
                         )
                     )
                     await self.uow.commit()
-                    send_email_change_confirmation_email.delay(
-                        token_data.model_dump_json()
-                    )
+                    # ЗАКОМЕНТОВАНО: Celery task
+                    # send_email_change_confirmation_email.delay(
+                    #     token_data.model_dump_json()
+                    # )
+                    log.info(f"Email change token created for {user.email}: {token_data.token}")
                     return True
                 else:
                     raise InvalidCredentialsException()
@@ -471,7 +447,9 @@ class UserService(JWTTokensMixin, BaseService):
                     )
                 )
                 await self.uow.commit()
-                send_password_reset_email.delay(token_data.model_dump_json())
+                # ЗАКОМЕНТОВАНО: Celery task
+                # send_password_reset_email.delay(token_data.model_dump_json())
+                log.info(f"Password reset token created for {user.email}: {token_data.token}")
                 return True
         except SQLAlchemyError as e:
             log.exception(e)
