@@ -133,10 +133,11 @@ class UserService(JWTTokensMixin, BaseService):
     #     except SQLAlchemyError as e:
     #         log.exception(e)
     #         raise ObjectCreateException("User")
+    
     async def create_user(
-    self,
-    data: UserCreate | AdminUserCreate,
-    send_confirmation_email: bool = False,
+        self,
+        data: UserCreate | AdminUserCreate,
+        send_confirmation_email: bool = False,
 ) -> UserShow:
     try:
         async with self.uow:
@@ -154,7 +155,7 @@ class UserService(JWTTokensMixin, BaseService):
                         owner_email=user.email,
                     )
                 )
-                # send_registration_email.delay(token_data.model_dump_json())
+                # send_registration_email.delay(token_data.model_dump_json())  це тимчасово закоментував
                 log.info(f"Registration token created for {user.email}: {token_data.token}")
             await self.uow.commit()
             return await self.get_show_scheme(user)
