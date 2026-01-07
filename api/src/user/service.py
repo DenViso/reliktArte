@@ -105,34 +105,56 @@ class UserService(JWTTokensMixin, BaseService):
             created_at=obj.created_at,
             updated_at=obj.updated_at,
         )
-
+# 
+    # async def create_user(
+        # self,
+        # data: UserCreate | AdminUserCreate,
+        # send_confirmation_email: bool = False,
+    # ) -> UserShow:
+    #     try:
+    #         async with self.uow:
+    #             if await self.uow.user.exists_by_email(data.email):
+    #                 raise UserByEmailAlreadyExistsException(data.email)
+    #             user = await self.uow.user.create(obj_in=data)
+    #             await self.uow.add(user)
+    #             if send_confirmation_email:
+    #                 # Send confirmation email
+    #                 token_data = await AuthTokenService(
+    #                     self.uow
+    #                 ).create_auth_token(
+    #                     AuthTokenCreate(
+    #                         token_type=AuthTokenType.REGISTRATION_CONFIRM,
+    #                         owner_email=user.email,
+    #                     )
+    #                 )
+    #                 send_registration_email.delay(token_data.model_dump_json())
+    #             await self.uow.commit()
+    #             return await self.get_show_scheme(user)
+    #     except SQLAlchemyError as e:
+    #         log.exception(e)
+    #         raise ObjectCreateException("User")
     async def create_user(
-        self,
-        data: UserCreate | AdminUserCreate,
-        send_confirmation_email: bool = False,
-    ) -> UserShow:
-        try:
-            async with self.uow:
-                if await self.uow.user.exists_by_email(data.email):
-                    raise UserByEmailAlreadyExistsException(data.email)
-                user = await self.uow.user.create(obj_in=data)
-                await self.uow.add(user)
-                if send_confirmation_email:
-                    # Send confirmation email
-                    token_data = await AuthTokenService(
-                        self.uow
-                    ).create_auth_token(
-                        AuthTokenCreate(
-                            token_type=AuthTokenType.REGISTRATION_CONFIRM,
-                            owner_email=user.email,
-                        )
-                    )
-                    send_registration_email.delay(token_data.model_dump_json())
-                await self.uow.commit()
-                return await self.get_show_scheme(user)
-        except SQLAlchemyError as e:
-            log.exception(e)
-            raise ObjectCreateException("User")
+    self,
+    data: UserCreate | AdminUserCreate,
+    send_confirmation_email: bool = False,
+) -> UserShow:
+    try:
+        async with self.uow:
+            if await self.uow.user.exists_by_email(data.email):
+                raise UserByEmailAlreadyExistsException(data.email)
+            user = await self.uow.user.create(obj_in=data)
+            await self.uow.add(user)
+            if send_confirmation_email:
+                # Send confirmation email
+                token_data = await AuthTokenService(
+                    self.uow
+                ).create_auth_token(...)
+                send_registration_email.delay(token_data.model_dump_json())  # <-- ТУТ ПРОБЛЕМА!
+            await self.uow.commit()
+            return await self.get_show_scheme(user)
+    except SQLAlchemyError as e:
+        log.exception(e)
+        raise ObjectCreateException("User")
 
     async def confirm_registration(self, token: str) -> bool:
         try:
