@@ -41,7 +41,7 @@ router = APIRouter(
 async def create_user(
     uow: uowDEP,
     data: UserCreate,
-    send_confirmation_email: bool = True,
+    send_confirmation_email: bool = False,
 ) -> UserShow:
     try:
         return await UserService(uow).create_user(

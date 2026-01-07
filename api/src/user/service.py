@@ -109,7 +109,7 @@ class UserService(JWTTokensMixin, BaseService):
     async def create_user(
         self,
         data: UserCreate | AdminUserCreate,
-        send_confirmation_email: bool = True,
+        send_confirmation_email: bool = False,
     ) -> UserShow:
         try:
             async with self.uow:
