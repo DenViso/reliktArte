@@ -28,7 +28,10 @@ export const validateToken = async () => {
 
     if (accessToken) {
         const isTokenValid = await axios
-            .post(generateUrl("api/v1/user/token/verify?as_admin=true"), {
+            .post(generateUrl(
+                // "api/v1/user/token/verify?as_admin=true"
+                "api/v1/user/create/?as_admin=..."
+            ), {
                 token: accessToken,
             })
             .then((res) => res.data || false)
@@ -93,7 +96,10 @@ export const registerUser = async (data: any) => {
 // };
 export const singInAccount = async (data: any) => {
     return await axios
-        .post(generateUrl("api/v1/user/auth?as_admin=true"), {
+        .post(generateUrl(
+            // "api/v1/user/auth?as_admin=true"
+            "api/v1/user/auth/?as_admin=true"
+        ), {
             ...data,
         })
         .then((res) => {
