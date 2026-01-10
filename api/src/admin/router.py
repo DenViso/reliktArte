@@ -8,6 +8,7 @@ import traceback
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from ..product.models import Product, Category, ProductPhoto
+from ..product.enums import ProductPhotoDepEnum  # ← ІМПОРТ ENUM
 from ..core.db.unitofwork import UnitOfWork
 
 try:
@@ -42,7 +43,6 @@ def extract_docx_content(file_path: Path):
         if not all_paragraphs:
             return "Опис порожній", [], None, False, False, 0
 
-        # ✅ details - простий масив строк
         details = all_paragraphs
         lines_count = len(details)
         
@@ -70,8 +70,7 @@ def extract_docx_content(file_path: Path):
 
 async def import_doors_task(session: AsyncSession, category_id: int) -> dict:
     """Імпорт дверей"""
-    # ✅ ВИПРАВЛЕНО: абсолютний шлях від кореня проекту
-    base_path = Path(__file__).parent.parent.parent  # api/src/admin -> api/
+    base_path = Path(__file__).parent.parent.parent
     catalog_path = base_path / "static" / "catalog" / "door"
     
     import_status["details"].append(f"🔍 Шукаю каталог: {catalog_path}")
@@ -180,7 +179,7 @@ async def import_doors_task(session: AsyncSession, category_id: int) -> dict:
                         product_id=product.id,
                         photo=web_path,
                         is_main=(idx == 0 and not has_main),
-                        dependency="color"
+                        dependency=ProductPhotoDepEnum.COLOR  # ← ВИПРАВЛЕНО!
                     ))
                     new_photos_count += 1
             
@@ -196,8 +195,7 @@ async def import_doors_task(session: AsyncSession, category_id: int) -> dict:
 
 async def import_mouldings_task(session: AsyncSession, category_id: int) -> dict:
     """Імпорт лиштв"""
-    # ✅ ВИПРАВЛЕНО: абсолютний шлях
-    base_path = Path(__file__).parent.parent.parent  # api/src/admin -> api/
+    base_path = Path(__file__).parent.parent.parent
     catalog_path = base_path / "static" / "catalog" / "mouldings"
     
     import_status["details"].append(f"🔍 Шукаю каталог: {catalog_path}")
@@ -298,7 +296,7 @@ async def import_mouldings_task(session: AsyncSession, category_id: int) -> dict
                     product_id=product.id,
                     photo=web_path,
                     is_main=(idx == 0 and not has_main),
-                    dependency="color"
+                    dependency=ProductPhotoDepEnum.COLOR  # ← ВИПРАВЛЕНО!
                 ))
                 new_photos_count += 1
         
