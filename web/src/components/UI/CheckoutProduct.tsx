@@ -7,9 +7,14 @@ import { ProductPhotoType } from "../../types/productsRelatedTypes";
 import { getItem } from "../../utils/getItem";
 import { changeCartItem } from "../../utils/handleCart";
 import DropDown from "./DropDown";
+import { DEFAULT_DOOR_SIZES, CATEGORIES_WITH_DEFAULT_SIZES } from "../../constants/defaultSizes";
+import { DEFAULT_DOOR_COLORS, CATEGORIES_WITH_DEFAULT_COLORS } from "../../constants/defaultColors";
+import { DEFAULT_GLASS_COLORS, CATEGORIES_WITH_DEFAULT_GLASS_COLORS } from "../../constants/defaultGlassColors";
+import { GLASS_PRESENCE_OPTIONS } from "../../constants/glassPresence";
+import { ORIENTATION_OPTIONS, DEFAULT_ORIENTATION } from "../../constants/orientationOptions";
 
 type CheckoutProductProps = {
-    product: any; // checkout product type needed
+    product: any;
     setValue?: any;
     deleteItem?: any;
     onQuantityChange?: any;
@@ -34,6 +39,8 @@ const CheckoutProduct = ({
     onQuantityChange,
 }: CheckoutProductProps) => {
     const [allowedSizes, setAllowedSizes] = useState<any>([]);
+    const [availableColors, setAvailableColors] = useState<any>([]);
+    const [availableGlassColors, setAvailableGlassColors] = useState<any>([]);
     const [productPhotos, setProductPhotos] = useState<ProductPhotoType[]>([]);
     const [currentPhoto, setCurrentPhoto] = useState<string>("");
     const [currentProduct, setCurrentProduct] = useState<any>({});
@@ -45,6 +52,12 @@ const CheckoutProduct = ({
     const isProductLoaded = useRef(false);
     const [withGlass, setWithGlass] = useState(false);
     const dispatch = useDispatch();
+
+    // Обчислені значення для відображення в лейблах
+    const selectedColor = availableColors.find((color: any) => color.id === product?.color_id);
+    const selectedSize = allowedSizes.find((size: any) => size.id === product?.size_id);
+    const selectedGlassColor = availableGlassColors.find((color: any) => color.id === product?.glass_color_id);
+    const productHasGlass = currentProductChild?.have_glass;
 
     const getProductInfo = async (product: any) => {
         setCurrentProduct(product);
@@ -117,32 +130,55 @@ const CheckoutProduct = ({
     }, [productQuantity]);
 
     useEffect(() => {
-        const getAllowedSizes = async () => {
+        const loadProductData = async () => {
             if (currentProduct && currentProductChild?.category_id) {
-                let currentSizes: any = [];
+                // Завантаження розмірів
+                if (CATEGORIES_WITH_DEFAULT_SIZES.includes(currentProductChild.category_id)) {
+                    setAllowedSizes(DEFAULT_DOOR_SIZES);
+                } else {
+                    let currentSizes: any = [];
+                    const currentCategory = await getItem(
+                        `api/v1/product/category/${currentProductChild.category_id}/`
+                    );
 
-                const currentCategory = await getItem(
-                    `api/v1/product/category/${currentProductChild.category_id}/`
-                );
+                    const allowedSizesIds = currentCategory.allowed_sizes;
 
-                const allowedSizes = currentCategory.allowed_sizes;
+                    if (allowedSizesIds && allowedSizesIds.length > 0) {
+                        for (const sizeId of allowedSizesIds) {
+                            const sizeObject = await getItem(
+                                "api/v1/product/size/$id",
+                                {
+                                    id: sizeId,
+                                }
+                            );
 
-                if (allowedSizes && allowedSizes.length > 0) {
-                    for (const sizeId of allowedSizes) {
-                        const sizeObject = await getItem(
-                            "api/v1/product/size/$id",
-                            {
-                                id: sizeId,
+                            if (sizeObject) {
+                                currentSizes.push(sizeObject);
                             }
-                        );
-
-                        if (sizeObject) {
-                            currentSizes.push(sizeObject);
                         }
+                    }
+                    setAllowedSizes(currentSizes);
+                }
+
+                // Завантаження кольорів
+                if (availableColors.length === 0) {
+                    if (CATEGORIES_WITH_DEFAULT_COLORS.includes(currentProductChild.category_id)) {
+                        setAvailableColors(DEFAULT_DOOR_COLORS);
+                    } else {
+                        const colors = await getItem("api/v1/product/related/product_color/list/");
+                        if (colors) setAvailableColors(colors);
                     }
                 }
 
-                setAllowedSizes(currentSizes);
+                // Завантаження кольорів скла
+                if (availableGlassColors.length === 0) {
+                    if (CATEGORIES_WITH_DEFAULT_GLASS_COLORS.includes(currentProductChild.category_id)) {
+                        setAvailableGlassColors(DEFAULT_GLASS_COLORS);
+                    } else {
+                        const glassColors = await getItem("api/v1/product/related/product_glass_color/list/");
+                        if (glassColors) setAvailableGlassColors(glassColors);
+                    }
+                }
             }
         };
 
@@ -157,32 +193,39 @@ const CheckoutProduct = ({
             }
         };
 
-        getAllowedSizes();
+        loadProductData();
         setUpPhotos();
     }, [currentProductChild]);
 
     const onChosen = async (fieldName: string, value: any, field: string) => {
-        const newPhoto = productPhotos.find(
-            (photo: any) => photo[field] === value
-        );
+    const newPhoto = productPhotos.find(
+        (photo: any) => photo[field] === value
+    );
 
-        if (newPhoto) {
-            setCurrentPhoto(newPhoto.photo);
+    if (newPhoto) {
+        setCurrentPhoto(newPhoto.photo);
+    }
+
+    if (product && product[fieldName] !== value) {
+        if (setValue) {
+            setValue(product.id, fieldName, value);
         }
 
-        if (product && product[fieldName] !== value) {
-            if (setValue) {
-                setValue(product.id, fieldName, value);
-            }
-
-            if (fieldName === "with_glass" && !value) {
-                onChosen("glass_color_id", null, "glass_color_id");
-            }
+        // Якщо відключили скло, скидаємо withGlass стейт
+        if (fieldName === "with_glass" && !value) {
+            setWithGlass(false);
+            // Відправляємо тільки зміну with_glass
             await changeCartItem(product.id, { [fieldName]: value }).then(() =>
                 dispatch(ChangeCartProduct({ ...product, [fieldName]: value }))
             );
+            return;
         }
-    };
+
+        await changeCartItem(product.id, { [fieldName]: value }).then(() =>
+            dispatch(ChangeCartProduct({ ...product, [fieldName]: value }))
+        );
+    }
+};
 
     const debouncedOnChosen = useRef(debounce(onChosen, 300)).current;
 
@@ -268,27 +311,31 @@ const CheckoutProduct = ({
                 </div>
 
                 <div className="checkout-product-options checkout-product-cell">
-                    <DropDown
-                        borderless={false}
-                        label="колір"
-                        field="color_id"
-                        options={{
-                            url: "api/v1/product/related/product_color/list/",
-                            labelKey: "name",
-                        }}
-                        onChosen={(fieldName: string, value: any) =>
-                            debouncedOnChosen(fieldName, value, "color_id")
-                        }
-                        defaultValue={{
-                            defaultFieldName: "value",
-                            defaultValue: product.color_id,
-                        }}
-                    />
-
-                    {allowedSizes && allowedSizes.length > 0 ? (
+                    {/* КОЛІР (з defaultColors) */}
+                    {availableColors.length > 0 && (
                         <DropDown
                             borderless={false}
-                            label="розмір"
+                            label={selectedColor ? selectedColor.name : "колір"}
+                            field="color_id"
+                            options={{
+                                value: availableColors,
+                                labelKey: "name",
+                            }}
+                            onChosen={(fieldName: string, value: any) =>
+                                debouncedOnChosen(fieldName, value, "color_id")
+                            }
+                            defaultValue={{
+                                defaultFieldName: "value",
+                                defaultValue: product.color_id,
+                            }}
+                        />
+                    )}
+
+                    {/* РОЗМІР (з defaultSizes) */}
+                    {allowedSizes && allowedSizes.length > 0 && (
+                        <DropDown
+                            borderless={false}
+                            label={selectedSize ? selectedSize.dimensions : "розмір"}
                             field="size_id"
                             options={{
                                 value: allowedSizes,
@@ -302,57 +349,66 @@ const CheckoutProduct = ({
                                 defaultValue: product.size_id,
                             }}
                         />
-                    ) : null}
-
-                    {currentProductChild?.have_glass && (
-                        <DropDown
-                            borderless={false}
-                            label="наявність скла"
-                            field="with_glass"
-                            options={[
-                                {
-                                    name: "Присутнє",
-                                    value: true,
-                                },
-                                {
-                                    name: "Відсутнє",
-                                    value: false,
-                                },
-                            ]}
-                            onChosen={(fieldName: string, value: any) => {
-                                debouncedOnChosen(
-                                    fieldName,
-                                    value,
-                                    "with_glass"
-                                );
-                                setWithGlass(value);
-                            }}
-                            defaultValue={{
-                                defaultFieldName: "value",
-                                defaultValue: product?.with_glass,
-                            }}
-                        />
                     )}
 
-                    {withGlass && (
+                    {/* НАЯВНІСТЬ СКЛА (true/false) */}
+                    {productHasGlass && (
+                        <>
+                            <DropDown
+                                borderless={false}
+                                label="наявність скла"
+                                field="with_glass"
+                                options={GLASS_PRESENCE_OPTIONS}
+                                onChosen={(fieldName: string, value: any) => {
+                                    debouncedOnChosen(fieldName, value, "with_glass");
+                                    setWithGlass(value);
+                                }}
+                                defaultValue={{
+                                    defaultFieldName: "value",
+                                    defaultValue: product?.with_glass !== undefined ? product.with_glass : false,
+                                }}
+                            />
+
+                            {/* КОЛІР СКЛА (якщо with_glass === true, показуємо defaultGlassColors) */}
+                            {withGlass && availableGlassColors.length > 0 && (
+                                <DropDown
+                                    borderless={false}
+                                    label={selectedGlassColor ? selectedGlassColor.name : "колір скла"}
+                                    field="glass_color_id"
+                                    options={{
+                                        value: availableGlassColors,
+                                        labelKey: "name",
+                                    }}
+                                    onChosen={(fieldName: string, value: any) =>
+                                        debouncedOnChosen(fieldName, value, "glass_color_id")
+                                    }
+                                    defaultValue={{
+                                        defaultFieldName: "value",
+                                        defaultValue: product?.glass_color_id,
+                                    }}
+                                />
+                            )}
+                        </>
+                    )}
+
+                    {/* ОРІЄНТАЦІЯ (за замовчуванням "ліва") */}
+                    {currentProductChild?.orientation_choice && (
                         <DropDown
                             borderless={false}
-                            label="колір скла"
-                            field="glass_color_id"
-                            options={{
-                                url: "api/v1/product/related/product_glass_color/list/",
-                                labelKey: "name",
-                            }}
+                            label="сторона петель"
+                            field="orientation"
+                            options={ORIENTATION_OPTIONS}
                             onChosen={(fieldName: string, value: any) =>
-                                debouncedOnChosen(fieldName, value, "color_id")
+                                debouncedOnChosen(fieldName, value, "orientation")
                             }
                             defaultValue={{
                                 defaultFieldName: "value",
-                                defaultValue: product?.glass_color_id,
+                                defaultValue: product?.orientation || DEFAULT_ORIENTATION,
                             }}
                         />
                     )}
 
+                    {/* МАТЕРІАЛ (опціонально) */}
                     {currentProductChild?.material_choice && (
                         <DropDown
                             borderless={false}
@@ -369,11 +425,7 @@ const CheckoutProduct = ({
                                 },
                             ]}
                             onChosen={(fieldName: string, value: any) =>
-                                debouncedOnChosen(
-                                    fieldName,
-                                    value,
-                                    "material_choice"
-                                )
+                                debouncedOnChosen(fieldName, value, "material")
                             }
                             defaultValue={{
                                 defaultFieldName: "value",
@@ -382,32 +434,7 @@ const CheckoutProduct = ({
                         />
                     )}
 
-                    {currentProductChild?.orientation_choice && (
-                        <DropDown
-                            borderless={false}
-                            label="сторона петель"
-                            field="orientation"
-                            options={[
-                                { name: "Ліва", value: "left" },
-                                {
-                                    name: "Права",
-                                    value: "right",
-                                },
-                            ]}
-                            onChosen={(fieldName: string, value: any) =>
-                                debouncedOnChosen(
-                                    fieldName,
-                                    value,
-                                    "type_of_platband"
-                                )
-                            }
-                            defaultValue={{
-                                defaultFieldName: "value",
-                                defaultValue: product?.orientation,
-                            }}
-                        />
-                    )}
-
+                    {/* ТИП ЛИШТВИ (опціонально) */}
                     {currentProduct?.type_of_platband_choice && (
                         <DropDown
                             borderless={false}
@@ -424,11 +451,7 @@ const CheckoutProduct = ({
                                 },
                             ]}
                             onChosen={(fieldName: string, value: any) =>
-                                debouncedOnChosen(
-                                    fieldName,
-                                    value,
-                                    "type_of_platband_choice"
-                                )
+                                debouncedOnChosen(fieldName, value, "type_of_platband")
                             }
                             defaultValue={{
                                 defaultFieldName: "value",

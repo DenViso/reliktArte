@@ -74,6 +74,7 @@ const CartModal = ({ closeModal }: CartModalProps) => {
         <div className="cart-modal" onClick={closeModal}>
             <div className="cart-modal-inner-wrapper" onClick={stopPropagation}>
                 <div className="cart-modal-inner" onClick={stopPropagation}>
+                    {/* HEADER */}
                     <div className="cart-modal-inner-header">
                         <p className="upper black mid">корзина</p>
                         <svg
@@ -93,42 +94,46 @@ const CartModal = ({ closeModal }: CartModalProps) => {
                         </svg>
                     </div>
 
+                    {/* PRODUCTS CONTAINER */}
                     <div className="cart-modal-inner-products-container">
-                        {isLoaded ? (
+                        {!isLoaded ? (
+                            <Loader />
+                        ) : (
                             <>
-                                <p className="black pre-small">
-                                    {products.length > 0
-                                        ? "Ваше замовлення:"
-                                        : "Тут поки що нічого немає ;("}
-                                </p>
+                                {/* ОПИС / ЗАГОЛОВОК */}
+                                <div className="cart-modal-inner-description">
+                                    <p className="black small">
+                                        {products.length > 0
+                                            ? "Ваше замовлення:"
+                                            : "Тут поки що нічого немає ;("}
+                                    </p>
+                                </div>
 
+                                {/* СПИСОК ПРОДУКТІВ */}
                                 {products.length > 0 && (
                                     <div className="cart-modal-inner-products">
                                         {products.map((product: any) => (
                                             <CheckoutProduct
+                                                key={product.id}
                                                 product={product}
                                                 setValue={() => false}
                                                 deleteItem={deleteItem}
-                                                onQuantityChange={
-                                                    onQuantityChange
-                                                }
+                                                onQuantityChange={onQuantityChange}
                                             />
                                         ))}
                                     </div>
                                 )}
                             </>
-                        ) : (
-                            <Loader />
                         )}
                     </div>
 
+                    {/* BUTTONS */}
                     <div className="cart-modal-inner-buttons">
-                        {products.length > 0 && isLoaded ? (
+                        {/* ЦІНА І КНОПКА ОПЛАТИ */}
+                        {products.length > 0 && isLoaded && (
                             <div className="cart-modal-inner-payment">
-                                <p className="black mid upper bold">
-                                    {totalValue} ₴
-                                </p>
-
+                                <p className="upper black bold big">{totalValue} ₴</p>
+                                
                                 <Button
                                     inversed={true}
                                     borderless={false}
@@ -141,8 +146,9 @@ const CartModal = ({ closeModal }: CartModalProps) => {
                                     перейти до сплати
                                 </Button>
                             </div>
-                        ) : null}
+                        )}
 
+                        {/* КНОПКА ПРОДОВЖИТИ ПОКУПКИ */}
                         <Button
                             colorScheme={"grey"}
                             onClickCallback={closeModal}

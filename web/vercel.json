@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd web && npm run build",
-  "outputDirectory": "web/build",
-  "installCommand": "cd web && npm install"
+  "buildCommand": " npm run build",
+  "outputDirectory": "build",
+  "installCommand": " npm install"
 }

@@ -132,7 +132,7 @@ const ProductSection = () => {
             }
           }
         }
-        if (product.photos && product.photos.length > 0) {
+        if (product.photos && product.photos.length > -1) {
           setProductPhotos(product.photos);
           const mainIdx = product.photos.findIndex((p: ProductPhotoType) => p.is_main);
           setCurrentIndex(mainIdx >= 0 ? mainIdx : 0);
@@ -140,6 +140,7 @@ const ProductSection = () => {
       } finally { setIsLoaded(true); }
     };
     loadProductData();
+    console.log(`${product?.photos?.length} & ${product?.id} `);
   }, [product]);
 
   useEffect(() => {
