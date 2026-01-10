@@ -21,6 +21,7 @@ class User(BaseModelMixin, Base):
         UUID(as_uuid=True),
         primary_key=True,
         default=uuid.uuid4,
+        server_default=text("gen_random_uuid()"), # ДЛЯ БАЗИ ДАНИХ (PostgreSQL)
         doc="User ID",
     )
     full_name: Mapped[str] = mapped_column(
