@@ -80,7 +80,7 @@ def extract_docx_content(file_path):
         details = [{"value": line} for line in lines]
         full_text = " ".join(lines).lower()
         
-        has_glass = any(kw in full_text for kw in ['скло', 'скла', 'glass', 'скління'])
+        has_glass = any(kw in full_text for kw in ['засклена', 'зі склом', 'скління']) and 'без скла' not in full_text
         has_orient = any(kw in full_text for kw in ['праве', 'ліве', 'правий', 'лівий'])
         
         # Пошук покриття
