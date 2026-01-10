@@ -4,10 +4,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 from collections import defaultdict
 import time
-
-# Додаємо шлях до кореня проекту
-sys.path.insert(0, str(Path(__file__).parent))
-
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker, Session
 from src.product.models import Product, Category, ProductPhoto
@@ -17,368 +13,97 @@ try:
     DOCX_AVAILABLE = True
 except ImportError:
     DOCX_AVAILABLE = False
-    print("⚠️ python-docx не встановлено.")
-
-# Глобальна статистика
-STATS = {
-    'catalog_analysis': {},
-    'import_details': defaultdict(lambda: {
-        'folders': 0,
-        'photos': 0,
-        'docs': 0,
-        'products_added': 0,
-        'products_updated': 0,
-        'photos_added': 0
-    })
-}
-
-def analyze_catalog_structure(base_path: Path, catalog_type: str):
-    """Аналізує структуру каталогу перед імпортом"""
-    print("\n" + "=" * 60)
-    print(f"🔍 АНАЛІЗ СТРУКТУРИ: {catalog_type.upper()}")
-    print("=" * 60)
-    
-    if not base_path.exists():
-        print(f"❌ Каталог не знайдено: {base_path}")
-        return
-    
-    total_folders = 0
-    total_photos = 0
-    total_docs = 0
-    class_stats = {}
-    
-    for class_dir in sorted(base_path.iterdir()):
-        if not class_dir.is_dir():
-            continue
-        
-        class_name = class_dir.name
-        class_folders = 0
-        class_photos = 0
-        class_docs = 0
-        
-        for product_dir in sorted(class_dir.iterdir()):
-            if not product_dir.is_dir():
-                continue
-            
-            class_folders += 1
-            
-            # Підрахунок фото
-            photos = []
-            for ext in ['*.webp', '*.png', '*.jpg', '*.jpeg']:
-                photos.extend(list(product_dir.glob(ext)))
-            photos = list({f.name.lower(): f for f in photos}.values())
-            class_photos += len(photos)
-            
-            # Перевірка наявності DOCX
-            desc_file = product_dir / "description.docx"
-            if desc_file.exists():
-                class_docs += 1
-        
-        if class_folders > 0:
-            class_stats[class_name] = {
-                'folders': class_folders,
-                'photos': class_photos,
-                'docs': class_docs
-            }
-            total_folders += class_folders
-            total_photos += class_photos
-            total_docs += class_docs
-            
-            print(f"\n📂 {class_name}:")
-            print(f"   └─ Папок товарів: {class_folders}")
-            print(f"   └─ Фото: {class_photos}")
-            print(f"   └─ DOCX файлів: {class_docs}")
-    
-    print("\n" + "-" * 60)
-    print(f"📊 ПІДСУМОК {catalog_type.upper()}:")
-    print(f"   • Класів товарів: {len(class_stats)}")
-    print(f"   • Всього папок: {total_folders}")
-    print(f"   • Всього фото: {total_photos}")
-    print(f"   • Всього DOCX: {total_docs}")
-    print("=" * 60)
-    
-    STATS['catalog_analysis'][catalog_type] = {
-        'classes': len(class_stats),
-        'folders': total_folders,
-        'photos': total_photos,
-        'docs': total_docs,
-        'class_details': class_stats
-    }
-
-def analyze_mouldings_structure(base_path: Path):
-    """Аналізує структуру каталогу лиштв (плоска структура)"""
-    print("\n" + "=" * 60)
-    print(f"🔍 АНАЛІЗ СТРУКТУРИ: MOULDINGS")
-    print("=" * 60)
-    
-    if not base_path.exists():
-        print(f"❌ Каталог не знайдено: {base_path}")
-        return
-    
-    total_folders = 0
-    total_photos = 0
-    total_docs = 0
-    
-    for product_dir in sorted(base_path.iterdir()):
-        if not product_dir.is_dir():
-            continue
-        
-        total_folders += 1
-        
-        # Підрахунок фото
-        photos = []
-        for ext in ['*.webp', '*.png', '*.jpg', '*.jpeg']:
-            photos.extend(list(product_dir.glob(ext)))
-        photos = list({f.name.lower(): f for f in photos}.values())
-        total_photos += len(photos)
-        
-        # Перевірка наявності DOCX
-        desc_file = product_dir / "description.docx"
-        if desc_file.exists():
-            total_docs += 1
-    
-    print(f"\n📂 Лиштви (без класів):")
-    print(f"   └─ Папок товарів: {total_folders}")
-    print(f"   └─ Фото: {total_photos}")
-    print(f"   └─ DOCX файлів: {total_docs}")
-    
-    print("\n" + "-" * 60)
-    print(f"📊 ПІДСУМОК MOULDINGS:")
-    print(f"   • Всього товарів: {total_folders}")
-    print(f"   • Всього фото: {total_photos}")
-    print(f"   • Всього DOCX: {total_docs}")
-    print("=" * 60)
-    
-    STATS['catalog_analysis']['mouldings'] = {
-        'classes': 0,
-        'folders': total_folders,
-        'photos': total_photos,
-        'docs': total_docs,
-        'class_details': {}
-    }
 
 def extract_docx_content(file_path):
-    """Зчитує весь текст з docx"""
-    if not DOCX_AVAILABLE:
+    if not DOCX_AVAILABLE or not file_path.exists():
         return "Опис відсутній", [{"value": "Опис відсутній"}], None, False, False, 0
-    
-    if not file_path.exists():
-        return "Файл опису відсутній", [{"value": "Файл опису відсутній"}], None, False, False, 0
 
     try:
         doc = Document(file_path)
         lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-        
         if not lines:
             return "Опис порожній", [{"value": "Опис порожній"}], None, False, False, 0
 
+        # ВИПРАВЛЕНО: Ключова зміна формату
         details = [{"value": line} for line in lines]
-        lines_count = len(details)
-
+        
         full_text = " ".join(lines).lower()
         has_glass = any(kw in full_text for kw in ['скло', 'скла', 'glass', 'скління'])
         has_orientation = any(kw in full_text for kw in ['праве', 'ліве', 'правий', 'лівий'])
         
-        covering_text = None
-        for line in lines:
-            if any(kw in line.lower() for kw in ['пвх', 'шпон', 'ламінат', 'горіх', 'дуб', 'ясен', 'покриття']):
-                covering_text = line
-                break
-        
-        if not covering_text and len(lines) > 1:
-            covering_text = lines[1]
-
+        covering_text = next((line for line in lines if any(kw in line.lower() for kw in ['пвх', 'шпон', 'ламінат', 'горіх', 'дуб', 'ясен', 'покриття'])), None)
         summary_text = " • ".join(lines[:3]) if len(lines) >= 3 else " • ".join(lines)
         
-        return summary_text, details, covering_text, has_glass, has_orientation, lines_count
-        
+        return summary_text, details, covering_text, has_glass, has_orientation, len(lines)
     except Exception as e:
-        print(f"  ❌ Помилка: {e}")
-        return "Помилка читання файлу", [{"value": "Помилка"}], None, False, False, 0
+        return "Помилка файлу", [{"value": "Помилка"}], None, False, False, 0
 
 def import_doors(session: Session, category_id: int):
-    """Імпорт дверей"""
     catalog_path = Path("static/catalog/door")
-    if not catalog_path.exists():
-        print("❌ Каталог дверей не знайдено")
-        return 0
-    
+    if not catalog_path.exists(): return 0
     count = 0
     for class_dir in sorted(catalog_path.iterdir()):
-        if not class_dir.is_dir():
-            continue
-        
-        class_name = class_dir.name
-        print(f"\n📂 {class_name}")
-        
+        if not class_dir.is_dir(): continue
         for product_dir in sorted(class_dir.iterdir()):
-            if not product_dir.is_dir():
-                continue
+            if not product_dir.is_dir(): continue
             
-            product_folder_name = product_dir.name
-            
-            # Збір фото
             all_photos = []
             for ext in ['*.webp', '*.png', '*.jpg', '*.jpeg']:
                 all_photos.extend(list(product_dir.glob(ext)))
-            
-            all_photos = list({f.name.lower(): f for f in all_photos}.values())
-            all_photos = sorted(all_photos, key=lambda x: x.name)
+            if not all_photos: continue
 
-            photos_count = len(all_photos)
-            
-            if not all_photos:
-                continue
-
-            # DOCX
-            desc_file = product_dir / "description.docx"
-            summary, details, cover, glass, orient, doc_lines = extract_docx_content(desc_file)
-
-            if not details:
-                details = [{"value": "Опис відсутній"}]
-            
+            summary, details, cover, glass, orient, doc_lines = extract_docx_content(product_dir / "description.docx")
             description_json = {"text": summary, "details": details}
-            if cover:
-                description_json["finishing"] = {"covering": {"text": cover}}
+            if cover: description_json["finishing"] = {"covering": {"text": cover}}
 
-            sku = f"DOOR-{class_name.replace(' ', '-')}-{product_folder_name}".upper()
-            
-            # БД
+            sku = f"DOOR-{class_dir.name.replace(' ', '-')}-{product_dir.name}".upper()
             product = session.query(Product).filter(Product.sku == sku).first()
             
             if not product:
                 product = Product(
                     sku=sku, category_id=category_id, price=50000,
-                    name=f"{class_name} {product_folder_name}",
-                    description=description_json,
-                    have_glass=glass, orientation_choice=orient
+                    name=f"{class_dir.name} {product_dir.name}",
+                    description=description_json, have_glass=glass, orientation_choice=orient
                 )
                 session.add(product)
-                session.flush()
-                print(f"  ➕ {sku} | 📷 {photos_count} фото | 📝 {doc_lines} рядків")
-                STATS['import_details']['door']['products_added'] += 1
             else:
-                product.name = f"{class_name} {product_folder_name}"
                 product.description = description_json
-                product.have_glass = glass
-                product.orientation_choice = orient
-                session.flush()
-                print(f"  🔄 {sku} | 📷 {photos_count} фото | 📝 {doc_lines} рядків")
-                STATS['import_details']['door']['products_updated'] += 1
-
-            # Фото
-            existing_photos = session.query(ProductPhoto).filter(
-                ProductPhoto.product_id == product.id
-            ).all()
-            existing_paths = {p.photo for p in existing_photos}
             
-            new_photos = 0
-            for idx, photo_file in enumerate(all_photos):
-                web_path = f"/static/catalog/door/{class_name}/{product_folder_name}/{photo_file.name}"
-                if web_path not in existing_paths:
-                    session.add(ProductPhoto(
-                        product_id=product.id, photo=web_path,
-                        is_main=(idx == 0 and len(existing_photos) == 0)
-                    ))
-                    new_photos += 1
-            
-            STATS['import_details']['door']['folders'] += 1
-            STATS['import_details']['door']['photos_added'] += new_photos
-            if desc_file.exists():
-                STATS['import_details']['door']['docs'] += 1
-            
+            session.flush()
             count += 1
-            
     return count
 
 def import_mouldings(session: Session, category_id: int):
-    """Імпорт лиштв (плоска структура - папки безпосередньо в mouldings/)"""
     catalog_path = Path("static/catalog/mouldings")
-    if not catalog_path.exists():
-        print("❌ Каталог лиштв не знайдено")
-        return 0
-    
+    if not catalog_path.exists(): return 0
     count = 0
-    print(f"\n📂 Лиштви")
-    
     for product_dir in sorted(catalog_path.iterdir()):
-        if not product_dir.is_dir():
-            continue
+        if not product_dir.is_dir(): continue
         
-        product_folder_name = product_dir.name
-        
-        # Фото
         all_photos = []
         for ext in ['*.webp', '*.png', '*.jpg', '*.jpeg']:
             all_photos.extend(list(product_dir.glob(ext)))
-        
-        all_photos = list({f.name.lower(): f for f in all_photos}.values())
-        all_photos = sorted(all_photos, key=lambda x: x.name)
+        if not all_photos: continue
 
-        photos_count = len(all_photos)
-
-        if not all_photos:
-            print(f"  ⚠️ {product_folder_name} - немає фото, пропущено")
-            continue
-
-        # DOCX
-        desc_file = product_dir / "description.docx"
-        summary, details, cover, glass, orient, doc_lines = extract_docx_content(desc_file)
-
-        if not details:
-            details = [{"value": "Опис відсутній"}]
-        
+        summary, details, cover, glass, orient, doc_lines = extract_docx_content(product_dir / "description.docx")
         description_json = {"text": summary, "details": details}
-        if cover:
-            description_json["finishing"] = {"covering": {"text": cover}}
+        if cover: description_json["finishing"] = {"covering": {"text": cover}}
 
-        # SKU без класу
-        sku = f"MOULDING-{product_folder_name}".upper()
-        
+        sku = f"MOULDING-{product_dir.name}".upper()
         product = session.query(Product).filter(Product.sku == sku).first()
         
         if not product:
             product = Product(
                 sku=sku, category_id=category_id, price=5000,
-                name=f"Лиштва {product_folder_name}",
-                description=description_json,
-                have_glass=False, orientation_choice=False
+                name=f"Лиштва {product_dir.name}",
+                description=description_json, have_glass=False, orientation_choice=False
             )
             session.add(product)
-            session.flush()
-            print(f"  ➕ {sku} | 📷 {photos_count} фото | 📝 {doc_lines} рядків")
-            STATS['import_details']['mouldings']['products_added'] += 1
         else:
-            product.name = f"Лиштва {product_folder_name}"
             product.description = description_json
-            session.flush()
-            print(f"  🔄 {sku} | 📷 {photos_count} фото | 📝 {doc_lines} рядків")
-            STATS['import_details']['mouldings']['products_updated'] += 1
-
-        # Фото
-        existing_photos = session.query(ProductPhoto).filter(
-            ProductPhoto.product_id == product.id
-        ).all()
-        existing_paths = {p.photo for p in existing_photos}
         
-        new_photos = 0
-        for idx, photo_file in enumerate(all_photos):
-            # Шлях без класу
-            web_path = f"/static/catalog/mouldings/{product_folder_name}/{photo_file.name}"
-            if web_path not in existing_paths:
-                session.add(ProductPhoto(
-                    product_id=product.id, photo=web_path,
-                    is_main=(idx == 0 and len(existing_photos) == 0)
-                ))
-                new_photos += 1
-        
-        STATS['import_details']['mouldings']['folders'] += 1
-        STATS['import_details']['mouldings']['photos_added'] += new_photos
-        if desc_file.exists():
-            STATS['import_details']['mouldings']['docs'] += 1
-        
+        session.flush()
         count += 1
-    
     return count
 
 def print_final_report():
