@@ -1,186 +1,466 @@
+import sys
 import os
-import traceback
 from pathlib import Path
 from dotenv import load_dotenv
 from collections import defaultdict
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker, Session
 
-# Імпорт ваших моделей
-from src.product.models import (
-    Product, Category, ProductPhoto, 
-    ProductSize, ProductColor
-)
-from src.product.enums import ProductPhotoDepEnum
+# Додаємо шлях до кореня проекту
+sys.path.insert(0, str(Path(__file__).parent))
+
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import sessionmaker, Session
+from src.product.models import Product, Category, ProductPhoto
 
 try:
     from docx import Document
     DOCX_AVAILABLE = True
 except ImportError:
     DOCX_AVAILABLE = False
+    print("⚠️ python-docx не встановлено.")
 
-# Розширена статистика
+# Глобальна статистика
 STATS = {
-    'total_deleted': 0,
+    'catalog_analysis': {},
     'import_details': defaultdict(lambda: {
-        'added': 0, 
-        'updated': 0, # У логіці TRUNCATE буде 0
-        'photos': 0
+        'folders': 0,
+        'photos': 0,
+        'docs': 0,
+        'products_added': 0,
+        'products_updated': 0,
+        'photos_added': 0
     })
 }
 
-# --- 1. ОБРОБКА КОНТЕНТУ ---
+def analyze_catalog_structure(base_path: Path, catalog_type: str):
+    """Аналізує структуру каталогу перед імпортом"""
+    print("\n" + "=" * 60)
+    print(f"🔍 АНАЛІЗ СТРУКТУРИ: {catalog_type.upper()}")
+    print("=" * 60)
+    
+    if not base_path.exists():
+        print(f"❌ Каталог не знайдено: {base_path}")
+        return
+    
+    total_folders = 0
+    total_photos = 0
+    total_docs = 0
+    class_stats = {}
+    
+    for class_dir in sorted(base_path.iterdir()):
+        if not class_dir.is_dir():
+            continue
+        
+        class_name = class_dir.name
+        class_folders = 0
+        class_photos = 0
+        class_docs = 0
+        
+        for product_dir in sorted(class_dir.iterdir()):
+            if not product_dir.is_dir():
+                continue
+            
+            class_folders += 1
+            
+            # Підрахунок фото
+            photos = []
+            for ext in ['*.webp', '*.png', '*.jpg', '*.jpeg']:
+                photos.extend(list(product_dir.glob(ext)))
+            photos = list({f.name.lower(): f for f in photos}.values())
+            class_photos += len(photos)
+            
+            # Перевірка наявності DOCX
+            desc_file = product_dir / "description.docx"
+            if desc_file.exists():
+                class_docs += 1
+        
+        if class_folders > 0:
+            class_stats[class_name] = {
+                'folders': class_folders,
+                'photos': class_photos,
+                'docs': class_docs
+            }
+            total_folders += class_folders
+            total_photos += class_photos
+            total_docs += class_docs
+            
+            print(f"\n📂 {class_name}:")
+            print(f"   └─ Папок товарів: {class_folders}")
+            print(f"   └─ Фото: {class_photos}")
+            print(f"   └─ DOCX файлів: {class_docs}")
+    
+    print("\n" + "-" * 60)
+    print(f"📊 ПІДСУМОК {catalog_type.upper()}:")
+    print(f"   • Класів товарів: {len(class_stats)}")
+    print(f"   • Всього папок: {total_folders}")
+    print(f"   • Всього фото: {total_photos}")
+    print(f"   • Всього DOCX: {total_docs}")
+    print("=" * 60)
+    
+    STATS['catalog_analysis'][catalog_type] = {
+        'classes': len(class_stats),
+        'folders': total_folders,
+        'photos': total_photos,
+        'docs': total_docs,
+        'class_details': class_stats
+    }
+
 def extract_docx_content(file_path):
-    if not DOCX_AVAILABLE or not file_path.exists():
-        return "Без опису", [], None, False, False, None, "UNKNOWN"
+    """Зчитує весь текст з docx"""
+    if not DOCX_AVAILABLE:
+        return "Опис відсутній", [{"value": "Опис відсутній"}], None, False, False, 0
+    
+    if not file_path.exists():
+        return "Файл опису відсутній", [{"value": "Файл опису відсутній"}], None, False, False, 0
 
     try:
         doc = Document(file_path)
         lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
-        if not lines: return "Порожньо", [], None, False, False, None, "EMPTY"
+        
+        if not lines:
+            return "Опис порожній", [{"value": "Опис порожній"}], None, False, False, 0
 
         details = [{"value": line} for line in lines]
+        lines_count = len(details)
+
         full_text = " ".join(lines).lower()
+        has_glass = any(kw in full_text for kw in ['скло', 'скла', 'glass', 'скління'])
+        has_orientation = any(kw in full_text for kw in ['праве', 'ліве', 'правий', 'лівий'])
         
-        extracted_sku = lines[0].strip()
-        covering = next((line for line in lines if any(kw in line.lower() for kw in ['пвх', 'шпон', 'ламінат', 'дуб'])), None)
+        covering_text = None
+        for line in lines:
+            if any(kw in line.lower() for kw in ['пвх', 'шпон', 'ламінат', 'горіх', 'дуб', 'ясен', 'покриття']):
+                covering_text = line
+                break
         
-        glass_line = next((line for line in lines if any(kw in line.lower() for kw in ['скло', 'скління', 'засклена'])), None)
-        has_glass = False
-        glass_value = None
-        negation = ['без', 'не має', 'немає', 'відсутнє', 'глуха']
-        
-        if glass_line:
-            if not any(n in glass_line.lower() for n in negation):
-                has_glass = True
-                glass_value = glass_line
-        elif 'глуха' in full_text:
-            has_glass = False
+        if not covering_text and len(lines) > 1:
+            covering_text = lines[1]
 
-        has_orient = any(kw in full_text for kw in ['праве', 'ліве', 'правий', 'лівий'])
+        summary_text = " • ".join(lines[:3]) if len(lines) >= 3 else " • ".join(lines)
         
-        stop_keywords = ['пвх', 'шпон', 'ламінат', 'дуб', '2000', 'х', 'скла', 'скло']
-        clean_parts = []
-        for line in lines[:3]:
-            if covering and line == covering: continue
-            if any(s in line.lower() for s in stop_keywords): continue
-            clean_parts.append(line)
-            if len(clean_parts) >= 2: break
-        summary = " • ".join(clean_parts)
+        return summary_text, details, covering_text, has_glass, has_orientation, lines_count
         
-        return summary, details, covering, has_glass, has_orient, glass_value, extracted_sku
-    except:
-        return "Помилка", [], None, False, False, None, "ERROR"
+    except Exception as e:
+        print(f"  ❌ Помилка: {e}")
+        return "Помилка читання файлу", [{"value": "Помилка"}], None, False, False, 0
 
-# --- 2. СИНХРОНІЗАЦІЯ ДОВІДНИКІВ ---
-def sync_refs(session: Session, category: Category):
-    def_size = session.query(ProductSize).first()
-    if not def_size:
-        def_size = ProductSize(height=2000, width=800, thickness=40)
-        session.add(def_size); session.flush()
+def import_doors(session: Session, category_id: int):
+    """Імпорт дверей"""
+    catalog_path = Path("static/catalog/door")
+    if not catalog_path.exists():
+        print("❌ Каталог дверей не знайдено")
+        return 0
     
-    def_color = session.query(ProductColor).filter_by(name="Стандарт").first()
-    if not def_color:
-        def_color = ProductColor(name="Стандарт")
-        session.add(def_color); session.flush()
-    
-    return def_size, def_color
-
-# --- 3. ОСНОВНИЙ ІМПОРТ ---
-def analyze_and_import(session: Session, cat_name: str):
-    folder_key = "door" if cat_name == "Двері" else "mouldings"
-    base_path = Path(f"static/catalog/{folder_key}")
-    if not base_path.exists(): return
-
-    cat = session.query(Category).filter_by(name=cat_name).first()
-    if not cat:
-        cat = Category(name=cat_name, is_glass_available=(cat_name=="Двері"))
-        session.add(cat); session.flush()
-    
-    def_size, def_color = sync_refs(session, cat)
-
-    product_dirs = []
-    if cat_name == "Двері":
-        for class_dir in sorted(base_path.iterdir()):
-            if class_dir.is_dir():
-                for p_dir in sorted(class_dir.iterdir()):
-                    if p_dir.is_dir(): product_dirs.append((class_dir.name, p_dir))
-    else:
-        for p_dir in sorted(base_path.iterdir()):
-            if p_dir.is_dir(): product_dirs.append(("Базова", p_dir))
-
-    for class_name, p_dir in product_dirs:
-        photos = list(p_dir.glob('*.webp'))
-        summary, details, cover, glass, orient, g_val, sku = extract_docx_content(p_dir / "description.docx")
+    count = 0
+    for class_dir in sorted(catalog_path.iterdir()):
+        if not class_dir.is_dir():
+            continue
         
-        desc_json = {"text": summary, "details": details}
-        if cover: desc_json["finishing"] = {"covering": {"text": cover}}
+        class_name = class_dir.name
+        print(f"\n📂 {class_name}")
+        
+        for product_dir in sorted(class_dir.iterdir()):
+            if not product_dir.is_dir():
+                continue
+            
+            product_folder_name = product_dir.name
+            
+            # Збір фото
+            all_photos = []
+            for ext in ['*.webp', '*.png', '*.jpg', '*.jpeg']:
+                all_photos.extend(list(product_dir.glob(ext)))
+            
+            all_photos = list({f.name.lower(): f for f in all_photos}.values())
+            all_photos = sorted(all_photos, key=lambda x: x.name)
 
-        product = Product(
-            sku=sku, category_id=cat.id, price=0, 
-            name=f"{class_name} {p_dir.name}",
-            description=desc_json,
-            have_glass=glass, orientation_choice=orient
-        )
-        session.add(product); session.flush()
-        STATS['import_details'][cat_name]['added'] += 1
+            photos_count = len(all_photos)
+            
+            if not all_photos:
+                continue
 
-        for idx, p_file in enumerate(sorted(photos)):
-            web_path = f"/static/catalog/{folder_key}/{p_dir.relative_to(base_path)}/{p_file.name}"
-            new_photo = ProductPhoto(
-                photo=web_path, product_id=product.id, is_main=(idx == 0),
-                dependency=ProductPhotoDepEnum.COLOR,
-                color_id=def_color.id, size_id=def_size.id, with_glass=g_val
-            )
-            session.add(new_photo)
-            STATS['import_details'][cat_name]['photos'] += 1
+            # DOCX
+            desc_file = product_dir / "description.docx"
+            summary, details, cover, glass, orient, doc_lines = extract_docx_content(desc_file)
 
-# --- 4. ЗАПУСК ТА ОЧИЩЕННЯ ---
+            if not details:
+                details = [{"value": "Опис відсутній"}]
+            
+            description_json = {"text": summary, "details": details}
+            if cover:
+                description_json["finishing"] = {"covering": {"text": cover}}
+
+            sku = f"DOOR-{class_name.replace(' ', '-')}-{product_folder_name}".upper()
+            
+            # БД
+            product = session.query(Product).filter(Product.sku == sku).first()
+            
+            is_new = False
+            if not product:
+                product = Product(
+                    sku=sku, category_id=category_id, price=50000,
+                    name=f"{class_name} {product_folder_name}",
+                    description=description_json,
+                    have_glass=glass, orientation_choice=orient
+                )
+                session.add(product)
+                session.flush()
+                print(f"  ➕ {sku} | 📷 {photos_count} фото | 📝 {doc_lines} рядків")
+                is_new = True
+                STATS['import_details']['door']['products_added'] += 1
+            else:
+                product.name = f"{class_name} {product_folder_name}"
+                product.description = description_json
+                product.have_glass = glass
+                product.orientation_choice = orient
+                session.flush()
+                print(f"  🔄 {sku} | 📷 {photos_count} фото | 📝 {doc_lines} рядків")
+                STATS['import_details']['door']['products_updated'] += 1
+
+            # Фото
+            existing_photos = session.query(ProductPhoto).filter(
+                ProductPhoto.product_id == product.id
+            ).all()
+            existing_paths = {p.photo for p in existing_photos}
+            
+            new_photos = 0
+            for idx, photo_file in enumerate(all_photos):
+                web_path = f"/static/catalog/door/{class_name}/{product_folder_name}/{photo_file.name}"
+                if web_path not in existing_paths:
+                    session.add(ProductPhoto(
+                        product_id=product.id, photo=web_path,
+                        is_main=(idx == 0 and len(existing_photos) == 0)
+                    ))
+                    new_photos += 1
+            
+            STATS['import_details']['door']['folders'] += 1
+            STATS['import_details']['door']['photos'] += new_photos
+            STATS['import_details']['door']['photos_added'] += new_photos
+            if desc_file.exists():
+                STATS['import_details']['door']['docs'] += 1
+            
+            count += 1
+            
+    return count
+
+def import_mouldings(session: Session, category_id: int):
+    """Імпорт лиштв"""
+    catalog_path = Path("static/catalog/mouldings")
+    if not catalog_path.exists():
+        print("❌ Каталог лиштв не знайдено")
+        return 0
+    
+    count = 0
+    for class_dir in sorted(catalog_path.iterdir()):
+        if not class_dir.is_dir():
+            continue
+        
+        class_name = class_dir.name
+        print(f"\n📂 {class_name}")
+        
+        for product_dir in sorted(class_dir.iterdir()):
+            if not product_dir.is_dir():
+                continue
+            
+            product_folder_name = product_dir.name
+            
+            # Фото
+            all_photos = []
+            for ext in ['*.webp', '*.png', '*.jpg', '*.jpeg']:
+                all_photos.extend(list(product_dir.glob(ext)))
+            
+            all_photos = list({f.name.lower(): f for f in all_photos}.values())
+            all_photos = sorted(all_photos, key=lambda x: x.name)
+
+            photos_count = len(all_photos)
+
+            if not all_photos:
+                continue
+
+            # DOCX
+            desc_file = product_dir / "description.docx"
+            summary, details, cover, glass, orient, doc_lines = extract_docx_content(desc_file)
+
+            if not details:
+                details = [{"value": "Опис відсутній"}]
+            
+            description_json = {"text": summary, "details": details}
+            if cover:
+                description_json["finishing"] = {"covering": {"text": cover}}
+
+            sku = f"MOULDING-{class_name.replace(' ', '-')}-{product_folder_name}".upper()
+            
+            product = session.query(Product).filter(Product.sku == sku).first()
+            
+            is_new = False
+            if not product:
+                product = Product(
+                    sku=sku, category_id=category_id, price=5000,
+                    name=f"{class_name} {product_folder_name}",
+                    description=description_json,
+                    have_glass=False, orientation_choice=False
+                )
+                session.add(product)
+                session.flush()
+                print(f"  ➕ {sku} | 📷 {photos_count} фото | 📝 {doc_lines} рядків")
+                is_new = True
+                STATS['import_details']['mouldings']['products_added'] += 1
+            else:
+                product.name = f"{class_name} {product_folder_name}"
+                product.description = description_json
+                session.flush()
+                print(f"  🔄 {sku} | 📷 {photos_count} фото | 📝 {doc_lines} рядків")
+                STATS['import_details']['mouldings']['products_updated'] += 1
+
+            # Фото
+            existing_photos = session.query(ProductPhoto).filter(
+                ProductPhoto.product_id == product.id
+            ).all()
+            existing_paths = {p.photo for p in existing_photos}
+            
+            new_photos = 0
+            for idx, photo_file in enumerate(all_photos):
+                web_path = f"/static/catalog/mouldings/{class_name}/{product_folder_name}/{photo_file.name}"
+                if web_path not in existing_paths:
+                    session.add(ProductPhoto(
+                        product_id=product.id, photo=web_path,
+                        is_main=(idx == 0 and len(existing_photos) == 0)
+                    ))
+                    new_photos += 1
+            
+            STATS['import_details']['mouldings']['folders'] += 1
+            STATS['import_details']['mouldings']['photos'] += new_photos
+            STATS['import_details']['mouldings']['photos_added'] += new_photos
+            if desc_file.exists():
+                STATS['import_details']['mouldings']['docs'] += 1
+            
+            count += 1
+            
+    return count
+
+def print_final_report():
+    """Виводить фінальний звіт про імпорт"""
+    print("\n" + "=" * 60)
+    print("📊 ДЕТАЛЬНИЙ ЗВІТ ПРО ІМПОРТ")
+    print("=" * 60)
+    
+    # Аналіз структури
+    print("\n🔍 ПОЧАТКОВИЙ АНАЛІЗ КАТАЛОГУ:")
+    print("-" * 60)
+    for catalog_type, data in STATS['catalog_analysis'].items():
+        print(f"\n📁 {catalog_type.upper()}:")
+        print(f"   • Класів товарів: {data['classes']}")
+        print(f"   • Всього папок: {data['folders']}")
+        print(f"   • Всього фото: {data['photos']}")
+        print(f"   • DOCX файлів: {data['docs']}")
+        
+        if data['class_details']:
+            print(f"\n   Деталі по класах:")
+            for class_name, stats in data['class_details'].items():
+                print(f"      └─ {class_name}: {stats['folders']} папок, {stats['photos']} фото, {stats['docs']} DOCX")
+    
+    # Результати імпорту
+    print("\n" + "=" * 60)
+    print("✅ РЕЗУЛЬТАТИ ІМПОРТУ:")
+    print("-" * 60)
+    
+    total_products_added = 0
+    total_products_updated = 0
+    total_photos_added = 0
+    
+    for catalog_type, data in STATS['import_details'].items():
+        print(f"\n📦 {catalog_type.upper()}:")
+        print(f"   • Оброблено папок: {data['folders']}")
+        print(f"   • Додано нових товарів: {data['products_added']}")
+        print(f"   • Оновлено товарів: {data['products_updated']}")
+        print(f"   • Додано фото: {data['photos_added']}")
+        print(f"   • Оброблено DOCX: {data['docs']}")
+        
+        total_products_added += data['products_added']
+        total_products_updated += data['products_updated']
+        total_photos_added += data['photos_added']
+    
+    print("\n" + "=" * 60)
+    print("🎯 ЗАГАЛЬНА СТАТИСТИКА:")
+    print("=" * 60)
+    print(f"   ✨ Додано нових товарів: {total_products_added}")
+    print(f"   🔄 Оновлено товарів: {total_products_updated}")
+    print(f"   📸 Завантажено фото на сервер: {total_photos_added}")
+    print(f"   📂 Всього товарів оброблено: {total_products_added + total_products_updated}")
+    
+    # Категорії
+    print("\n" + "-" * 60)
+    print("📋 КАТЕГОРІЇ:")
+    categories_processed = list(STATS['import_details'].keys())
+    for cat in categories_processed:
+        print(f"   • {cat.capitalize()}")
+    
+    print("=" * 60)
+
 def main():
+    """Головна функція"""
+    print("=" * 60)
+    print("🚀 ПОЧАТОК ІМПОРТУ КАТАЛОГУ")
+    print("=" * 60)
+    
     load_dotenv('.env')
-    db_url = os.getenv('DATABASE_URL').replace('postgresql://', 'postgresql+psycopg2://')
-    engine = create_engine(db_url)
+    
+    db_url = os.getenv('DATABASE_URL')
+    if not db_url:
+        print("❌ DATABASE_URL не знайдено!")
+        return
+    
+    # Використовуємо psycopg2 (синхронний)
+    db_url = db_url.replace('postgresql://', 'postgresql+psycopg2://')
+    
+    try:
+        db_host = db_url.split('@')[1].split('/')[0] if '@' in db_url else 'unknown'
+        print(f"🔗 Підключення до: {db_host}")
+    except:
+        print(f"🔗 Підключення до БД...")
+    
+    # Аналіз структури перед імпортом
+    analyze_catalog_structure(Path("static/catalog/door"), "door")
+    analyze_catalog_structure(Path("static/catalog/mouldings"), "mouldings")
+    
+    engine = create_engine(db_url, echo=False, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine)
     
     with SessionLocal() as session:
-        try:
-            print("🔴 Крок 1: Аналіз та очищення бази...")
-            
-            # Рахуємо скільки було перед видаленням
-            old_count = session.query(Product).count()
-            STATS['total_deleted'] = old_count
-            
-            # Повне очищення
-            session.execute(text("TRUNCATE TABLE products RESTART IDENTITY CASCADE"))
-            print(f"✅ Видалено записів: {old_count}")
-
-            print("🟢 Крок 2: Запис нових даних...")
-            analyze_and_import(session, "Двері")
-            analyze_and_import(session, "Лиштви")
-            
-            session.commit()
-            
-            print("\n" + "═"*50)
-            print("📊 ПІДСУМКОВА СТАТИСТИКА")
-            print("─"*50)
-            print(f"🗑️  ВСЬОГО ВИДАЛЕНО СТАРИХ ТОВАРІВ: {STATS['total_deleted']}")
-            print(f"🔄 ВСЬОГО ОНОВЛЕНО (перезаписано): 0 (обрано повне очищення)")
-            print("─"*50)
-            
-            total_added = 0
-            for cat, d in STATS['import_details'].items():
-                print(f"📦 {cat}: Записано {d['added']} шт. (+ {d['photos']} фото)")
-                total_added += d['added']
-            
-            print("─"*50)
-            print(f"✨ РЕЗУЛЬТАТ: +{total_added} нових записів у базі")
-            print("═"*50)
-            print("🎉 КАТАЛОГ ПОВНІСТЮ ОНОВЛЕНО!")
-
-        except Exception as e:
-            session.rollback()
-            print(f"❌ Помилка: {e}")
-            traceback.print_exc()
+        # Категорії
+        cat_door = session.query(Category).filter(Category.name == "Двері").first()
+        if not cat_door:
+            cat_door = Category(name="Двері", is_glass_available=True)
+            session.add(cat_door)
+            session.flush()
+            print("\n✅ Створено категорію: Двері")
+        else:
+            print("\n✅ Знайдено категорію: Двері")
+        
+        cat_mouldings = session.query(Category).filter(Category.name == "Лиштви").first()
+        if not cat_mouldings:
+            cat_mouldings = Category(name="Лиштви", is_glass_available=False)
+            session.add(cat_mouldings)
+            session.flush()
+            print("✅ Створено категорію: Лиштви")
+        else:
+            print("✅ Знайдено категорію: Лиштви")
+        
+        print("\n" + "=" * 60)
+        print("📂 ІМПОРТ ДВЕРЕЙ")
+        print("=" * 60)
+        door_count = import_doors(session, cat_door.id)
+        
+        print("\n" + "=" * 60)
+        print("📂 ІМПОРТ ЛИШТВ")
+        print("=" * 60)
+        mouldings_count = import_mouldings(session, cat_mouldings.id)
+        
+        session.commit()
+        
+        # Фінальний звіт
+        print_final_report()
+        
+        print("\n🎉 ІМПОРТ УСПІШНО ЗАВЕРШЕНО!")
+        print("=" * 60)
 
 if __name__ == "__main__":
     main()

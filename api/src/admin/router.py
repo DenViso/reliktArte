@@ -16,7 +16,6 @@ except ImportError:
 
 router = APIRouter(prefix="/admin", tags=["Admin"])
 
-# Глобальний стан для моніторингу
 import_status = {
     "is_running": False,
     "progress": "",
@@ -25,7 +24,7 @@ import_status = {
 }
 
 def extract_docx_content(file_path: Path):
-    """Витягує чистий SKU (артикул) та метадані"""
+    """Витягує артикул як SKU та аналізує контент"""
     if not DOCX_AVAILABLE or not file_path.exists():
         return "Без опису", [{"value": "Опис відсутній"}], None, False, False, "UNKNOWN"
 
@@ -35,44 +34,39 @@ def extract_docx_content(file_path: Path):
         if not lines:
             return "Порожньо", [], None, False, False, "EMPTY"
 
-        # SKU — тільки ПЕРШЕ СЛОВО першого рядка (тільки артикул)
-        raw_sku = lines[0].split()[0].replace(',', '').strip()
+        # Нова логіка SKU: Беремо перше слово з першого рядка (Артикул)
+        extracted_sku = lines[0].split()[0].replace(',', '').strip()
         
         details = [{"value": line} for line in lines]
         full_text = " ".join(lines).lower()
         
-        # Покриття (шукаємо ключові слова)
-        cover = next((l for l in lines if any(kw in l.lower() for kw in ['пвх', 'шпон', 'ламінат', 'дуб', 'матовий'])), None)
+        # Покриття
+        cover = next((l for l in lines if any(kw in l.lower() for kw in ['пвх', 'шпон', 'ламінат', 'дуб', 'емаль'])), None)
         
-        # Аналіз скла з урахуванням заперечень
+        # Скло (з урахуванням заперечень)
         negation = ['без', 'не має', 'немає', 'відсутнє', 'глуха']
         glass_line = next((l for l in lines if any(kw in l.lower() for kw in ['скло', 'скла', 'скління'])), None)
         has_glass = False
         if glass_line and not any(n in glass_line.lower() for n in negation):
             has_glass = True
-        elif 'глуха' in full_text:
-            has_glass = False
 
-        # Орієнтація
         has_orient = any(kw in full_text for kw in ['праве', 'ліве', 'правий', 'лівий'])
-        
-        # Короткий опис (Артикул + Назва моделі)
         summary = " • ".join(lines[:2])
         
-        return summary, details, cover, has_glass, has_orient, raw_sku
+        return summary, details, cover, has_glass, has_orient, extracted_sku
     except:
-        return "Помилка читання", [], None, False, False, "ERROR"
+        return "Помилка", [], None, False, False, "ERROR"
 
 async def import_task_logic(session: AsyncSession, category_id: int, folder_type: str):
-    """Універсальна логіка створення товарів"""
+    """Універсальна логіка завантаження товарів"""
     base_path = Path(__file__).parent.parent.parent
     catalog_path = base_path / "static" / "catalog" / folder_type
     stats = {"imported": 0, "photos": 0}
     
     if not catalog_path.exists():
+        import_status["details"].append(f"⚠️ Шлях не знайдено: {catalog_path}")
         return stats
 
-    # Формуємо список папок для обробки
     target_dirs = []
     if folder_type == "door":
         for class_dir in sorted(catalog_path.iterdir()):
@@ -85,19 +79,17 @@ async def import_task_logic(session: AsyncSession, category_id: int, folder_type
 
     for parent_name, p_dir in target_dirs:
         summary, details, cover, glass, orient, sku = extract_docx_content(p_dir / "description.docx")
-        
-        if sku in ["UNKNOWN", "EMPTY", "ERROR"]:
-            continue
+        if sku in ["UNKNOWN", "EMPTY", "ERROR"]: continue
 
-        # Створення товару (завжди новий, бо ми робимо TRUNCATE перед цим)
         description_json = {"text": summary, "details": details}
         if cover:
             description_json["finishing"] = {"covering": {"text": cover}}
 
+        # Створення товару з ціною 0
         new_product = Product(
             sku=sku,
             category_id=category_id,
-            price=0,  # Ціна за запитом
+            price=0,
             name=f"{parent_name} {p_dir.name}",
             description=description_json,
             have_glass=glass,
@@ -109,13 +101,11 @@ async def import_task_logic(session: AsyncSession, category_id: int, folder_type
         await session.flush()
         stats["imported"] += 1
 
-        # Додавання фото
+        # Фото
         photos = list(p_dir.glob('*.webp')) + list(p_dir.glob('*.jpg'))
         for idx, photo_file in enumerate(sorted(photos)):
-            # Формуємо шлях для вебу
             rel_path = p_dir.relative_to(catalog_path)
             web_path = f"/static/catalog/{folder_type}/{rel_path}/{photo_file.name}"
-            
             session.add(ProductPhoto(
                 product_id=new_product.id,
                 photo=web_path,
@@ -130,58 +120,56 @@ async def run_import_catalog(uow: UnitOfWork):
     global import_status
     try:
         import_status["is_running"] = True
-        import_status["details"] = ["🚀 Початок повної перезапису каталогу..."]
+        import_status["details"] = ["🚀 Запуск глобальної синхронізації..."]
         
         async with uow:
-            # 1. ОЧИЩЕННЯ
-            import_status["progress"] = "Видалення старих даних..."
-            # Рахуємо для статистики
-            count_res = await uow.session.execute(text("SELECT count(*) FROM products"))
+            # 1. ДИНАМІЧНЕ ОЧИЩЕННЯ (вирішує помилку UndefinedTable)
+            import_status["progress"] = "Очищення бази..."
+            prod_table = Product.__tablename__
+            
+            # Рахуємо записи перед видаленням
+            count_res = await uow.session.execute(text(f"SELECT count(*) FROM {prod_table}"))
             old_count = count_res.scalar()
             
-            # Повне очищення з скиданням ID (Identity)
-            await uow.session.execute(text("TRUNCATE TABLE products RESTART IDENTITY CASCADE"))
-            import_status["details"].append(f"🗑️ Видалено: {old_count} товарів")
+            # Очищення з CASCADE (видалить і фото автоматично)
+            await uow.session.execute(text(f"TRUNCATE TABLE {prod_table} RESTART IDENTITY CASCADE"))
+            import_status["details"].append(f"🗑️ Видалено старих товарів: {old_count}")
 
             # 2. ПЕРЕВІРКА КАТЕГОРІЙ
-            # Двері
             res_d = await uow.session.execute(select(Category).where(Category.name == "Двері"))
             cat_door = res_d.scalar_one_or_none()
             if not cat_door:
                 cat_door = Category(name="Двері", is_glass_available=True, have_orientation_choice=True)
                 uow.session.add(cat_door)
             
-            # Лиштви
             res_m = await uow.session.execute(select(Category).where(Category.name == "Лиштви"))
             cat_mould = res_m.scalar_one_or_none()
             if not cat_mould:
                 cat_mould = Category(name="Лиштви", is_glass_available=False)
                 uow.session.add(cat_mould)
-            
             await uow.session.flush()
 
             # 3. ІМПОРТ
-            import_status["progress"] = "Імпорт дверей..."
+            import_status["progress"] = "Завантаження дверей..."
             door_stats = await import_task_logic(uow.session, cat_door.id, "door")
             
-            import_status["progress"] = "Імпорт лиштви..."
+            import_status["progress"] = "Завантаження лиштви..."
             mould_stats = await import_task_logic(uow.session, cat_mould.id, "mouldings")
             
             await uow.commit()
             
-            # 4. ФІНАЛІЗАЦІЯ
             import_status["stats"] = {
                 "deleted": old_count,
                 "added_doors": door_stats["imported"],
-                "added_mouldings": mould_stats["imported"],
-                "total_photos": door_stats["photos"] + mould_stats["photos"]
+                "added_moulds": moulding_stats["imported"],
+                "total_photos": door_stats["photos"] + moulding_stats["photos"]
             }
-            import_status["progress"] = "Завершено!"
-            import_status["details"].append(f"✨ Записано {door_stats['imported'] + mould_stats['imported']} нових товарів.")
+            import_status["progress"] = "Завершено успішно!"
+            import_status["details"].append(f"✨ Каталог оновлено. Додано {door_stats['imported'] + moulding_stats['imported']} товарів.")
 
     except Exception as e:
         import_status["progress"] = "Помилка"
-        import_status["details"].append(f"❌ Помилка: {str(e)}")
+        import_status["details"].append(f"❌ Критична помилка: {str(e)}")
         traceback.print_exc()
     finally:
         import_status["is_running"] = False
@@ -191,11 +179,10 @@ async def run_import_catalog(uow: UnitOfWork):
 @router.post("/import-catalog")
 async def trigger_import(background_tasks: BackgroundTasks, uow: UnitOfWork = Depends()):
     if import_status["is_running"]:
-        raise HTTPException(status_code=409, detail="Імпорт уже запущено")
-    
-    import_status["is_running"] = True
+        raise HTTPException(status_code=409, detail="Імпорт вже триває")
+    import_status.update({"is_running": True, "progress": "Старт...", "details": []})
     background_tasks.add_task(run_import_catalog, uow)
-    return {"status": "started", "message": "Очищення та імпорт почалися у фоновому режимі"}
+    return {"message": "Процес запущено"}
 
 @router.get("/import-status")
 async def get_status():
