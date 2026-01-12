@@ -64,7 +64,6 @@ async def import_task_logic(session: AsyncSession, category_id: int, folder_type
     stats = {"imported": 0, "photos": 0}
     
     if not catalog_path.exists():
-        import_status["details"].append(f"⚠️ Шлях не знайдено: {catalog_path}")
         return stats
 
     target_dirs = []
@@ -85,7 +84,6 @@ async def import_task_logic(session: AsyncSession, category_id: int, folder_type
         if cover:
             description_json["finishing"] = {"covering": {"text": cover}}
 
-        # Створення товару з ціною 0
         new_product = Product(
             sku=sku,
             category_id=category_id,
@@ -101,7 +99,6 @@ async def import_task_logic(session: AsyncSession, category_id: int, folder_type
         await session.flush()
         stats["imported"] += 1
 
-        # Фото
         photos = list(p_dir.glob('*.webp')) + list(p_dir.glob('*.jpg'))
         for idx, photo_file in enumerate(sorted(photos)):
             rel_path = p_dir.relative_to(catalog_path)
@@ -118,24 +115,27 @@ async def import_task_logic(session: AsyncSession, category_id: int, folder_type
 
 async def run_import_catalog(uow: UnitOfWork):
     global import_status
+    # Ініціалізація змінних для уникнення "not defined" помилок
+    door_stats = {"imported": 0, "photos": 0}
+    mould_stats = {"imported": 0, "photos": 0}
+    old_count = 0
+    
     try:
         import_status["is_running"] = True
         import_status["details"] = ["🚀 Запуск глобальної синхронізації..."]
         
         async with uow:
-            # 1. ДИНАМІЧНЕ ОЧИЩЕННЯ (вирішує помилку UndefinedTable)
+            # 1. ОЧИЩЕННЯ
             import_status["progress"] = "Очищення бази..."
             prod_table = Product.__tablename__
             
-            # Рахуємо записи перед видаленням
             count_res = await uow.session.execute(text(f"SELECT count(*) FROM {prod_table}"))
             old_count = count_res.scalar()
             
-            # Очищення з CASCADE (видалить і фото автоматично)
             await uow.session.execute(text(f"TRUNCATE TABLE {prod_table} RESTART IDENTITY CASCADE"))
             import_status["details"].append(f"🗑️ Видалено старих товарів: {old_count}")
 
-            # 2. ПЕРЕВІРКА КАТЕГОРІЙ
+            # 2. КАТЕГОРІЇ
             res_d = await uow.session.execute(select(Category).where(Category.name == "Двері"))
             cat_door = res_d.scalar_one_or_none()
             if not cat_door:
@@ -152,20 +152,23 @@ async def run_import_catalog(uow: UnitOfWork):
             # 3. ІМПОРТ
             import_status["progress"] = "Завантаження дверей..."
             door_stats = await import_task_logic(uow.session, cat_door.id, "door")
+            import_status["details"].append(f"🚪 Двері оброблено: {door_stats['imported']}")
             
             import_status["progress"] = "Завантаження лиштви..."
             mould_stats = await import_task_logic(uow.session, cat_mould.id, "mouldings")
+            import_status["details"].append(f"🖼️ Лиштви оброблено: {mould_stats['imported']}")
             
             await uow.commit()
             
+            # ФІНАЛЬНА СТАТИСТИКА
             import_status["stats"] = {
                 "deleted": old_count,
                 "added_doors": door_stats["imported"],
-                "added_moulds": moulding_stats["imported"],
-                "total_photos": door_stats["photos"] + moulding_stats["photos"]
+                "added_moulds": mould_stats["imported"],
+                "total_photos": door_stats["photos"] + mould_stats["photos"]
             }
             import_status["progress"] = "Завершено успішно!"
-            import_status["details"].append(f"✨ Каталог оновлено. Додано {door_stats['imported'] + moulding_stats['imported']} товарів.")
+            import_status["details"].append(f"✨ Готово. Записано {door_stats['imported'] + mould_stats['imported']} нових товарів.")
 
     except Exception as e:
         import_status["progress"] = "Помилка"
@@ -174,8 +177,7 @@ async def run_import_catalog(uow: UnitOfWork):
     finally:
         import_status["is_running"] = False
 
-# --- Ендпоінти ---
-
+# --- ЕНДПОІНТИ (БЕЗ ЗМІН) ---
 @router.post("/import-catalog")
 async def trigger_import(background_tasks: BackgroundTasks, uow: UnitOfWork = Depends()):
     if import_status["is_running"]:
