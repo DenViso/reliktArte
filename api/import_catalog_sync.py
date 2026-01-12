@@ -25,10 +25,8 @@ except ImportError:
 
 # Глобальна статистика
 STATS = {
-    'catalog_analysis': {},
     'import_details': defaultdict(lambda: {
-        'folders': 0, 'photos': 0, 'docs': 0,
-        'products_added': 0, 'products_updated': 0, 'photos_added': 0
+        'folders': 0, 'products_added': 0, 'products_updated': 0, 'photos_added': 0
     })
 }
 
@@ -62,54 +60,58 @@ def sync_references(session: Session, category: Category):
     session.flush()
     return db_sizes[0], default_color
 
-# --- 2. ОБРОБКА КОНТЕНТУ ---
+# --- 2. ОБРОБКА КОНТЕНТУ (СКЛО, SUMMARY, SKU) ---
 
 def extract_docx_content(file_path):
-    """Зчитує текст, визначає скло, орієнтацію та покриття"""
+    """Зчитує текст, визначає SKU, чистий опис та наявність скла"""
     if not DOCX_AVAILABLE or not file_path.exists():
-        return "Опис відсутній", [{"value": "Опис відсутній"}], None, False, False, None
+        return "Опис відсутній", [{"value": "Опис відсутній"}], None, False, False, None, "UNKNOWN"
 
     try:
         doc = Document(file_path)
         lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
         if not lines: 
-            return "Опис порожній", [{"value": "Опис порожній"}], None, False, False, None
+            return "Опис порожній", [{"value": "Опис порожній"}], None, False, False, None, "EMPTY"
 
         details = [{"value": line} for line in lines]
         full_text = " ".join(lines).lower()
         
-        # Визначаємо покриття
+        # --- SKU: Тільки перший рядок (артикул) ---
+        extracted_sku = lines[0].strip()
+
+        # --- ПОКРИТТЯ (finishing) ---
         covering = next((line for line in lines if any(kw in line.lower() for kw in ['пвх', 'шпон', 'ламінат', 'дуб'])), None)
         
-        # --- ЛОГІКА СКЛА ---
-        # Шукаємо рядок про скло
+        # --- ЛОГІКА СКЛА (із запереченнями) ---
         glass_line = next((line for line in lines if any(kw in line.lower() for kw in ['скло', 'скління', 'засклена'])), None)
-        
         has_glass = False
         glass_value = None
+        negation_keywords = ['без', 'не має', 'немає', 'відсутнє', 'відсутня', 'глуха']
         
         if glass_line:
-            if "без скла" in glass_line.lower():
-                has_glass = False
-                glass_value = None # Якщо "Без Скла" -> null
-            else:
+            is_negated = any(neg in glass_line.lower() for neg in negation_keywords)
+            if not is_negated:
                 has_glass = True
-                glass_value = glass_line # Якщо назва скла є -> передаємо значення
-        
+                glass_value = glass_line
+        elif 'глуха' in full_text:
+            has_glass = False
+
+        # Орієнтація
         has_orient = any(kw in full_text for kw in ['праве', 'ліве', 'правий', 'лівий'])
         
-        # --- ФОРМУВАННЯ SUMMARY (без покриття) ---
-        # Беремо перші 2 рядки, ігноруючи рядок з покриттям
-        summary_parts = []
-        for line in lines[:2]:
-            if covering and line == covering:
-                continue
-            summary_parts.append(line)
-        summary = " • ".join(summary_parts)
+        # --- ЧИСТИЙ SUMMARY (Тільки Артикул та Модель) ---
+        stop_keywords = ['пвх', 'шпон', 'ламінат', 'дуб', '2000', 'х', 'праве', 'ліве', 'скла', 'скло']
+        clean_parts = []
+        for line in lines[:3]:
+            if covering and line == covering: continue
+            if any(stop in line.lower() for stop in stop_keywords): continue
+            clean_parts.append(line)
+            if len(clean_parts) >= 2: break
+        summary = " • ".join(clean_parts)
         
-        return summary, details, covering, has_glass, has_orient, glass_value
+        return summary, details, covering, has_glass, has_orient, glass_value, extracted_sku
     except Exception:
-        return "Помилка файлу", [{"value": "Помилка читання"}], None, False, False, None
+        return "Помилка", [], None, False, False, None, "ERROR"
 
 # --- 3. АНАЛІЗ ТА ІМПОРТ ---
 
@@ -129,7 +131,7 @@ def analyze_and_import(session: Session, cat_name: str):
     
     def_size, def_color = sync_references(session, cat)
 
-    print(f"\n🔍 АНАЛІЗ ТА ІМПОРТ: {cat_name.upper()}")
+    print(f"\n🔍 ІМПОРТ: {cat_name.upper()}")
     print("-" * 60)
 
     product_dirs = []
@@ -146,23 +148,23 @@ def analyze_and_import(session: Session, cat_name: str):
 
     for class_name, p_dir in product_dirs:
         photos = list(p_dir.glob('*.webp')) + list(p_dir.glob('*.jpg')) + list(p_dir.glob('*.png'))
-        if not photos and not (p_dir / "description.docx").exists():
+        docx_path = p_dir / "description.docx"
+        if not photos and not docx_path.exists():
             continue
 
-        STATS['import_details'][cat_name]['folders'] += 1
+        summary, details, cover, glass, orient, glass_v, extracted_sku = extract_docx_content(docx_path)
         
-        # Отримуємо оновлені дані з docx
-        summary, details, cover, glass, orient, glass_v = extract_docx_content(p_dir / "description.docx")
+        # Використовуємо чистий артикул як SKU
+        sku = extracted_sku 
         
-        sku = f"{folder_key[:3]}-{class_name}-{p_dir.name}".upper().replace(' ', '-')
         product = session.query(Product).filter_by(sku=sku).first()
-
         desc_json = {"text": summary, "details": details}
         if cover: desc_json["finishing"] = {"covering": {"text": cover}}
 
         if not product:
             product = Product(
-                sku=sku, category_id=cat.id, price=5000,
+                sku=sku, category_id=cat.id, 
+                price=0,  # 0 = "Надішліть запит"
                 name=f"{class_name} {p_dir.name}",
                 description=desc_json,
                 have_glass=glass, orientation_choice=orient
@@ -170,27 +172,26 @@ def analyze_and_import(session: Session, cat_name: str):
             session.add(product)
             session.flush()
             STATS['import_details'][cat_name]['products_added'] += 1
-            print(f"  ➕ Додано: {sku}")
+            print(f"  ➕ Додано: SKU {sku}")
         else:
             product.description = desc_json
             product.have_glass = glass
+            product.price = 0
             product.orientation_choice = orient
             STATS['import_details'][cat_name]['products_updated'] += 1
-            print(f"  🔄 Оновлено: {sku}")
+            print(f"  🔄 Оновлено: SKU {sku}")
 
-        # Фото
+        # Обробка Фото
         existing_photos = {p.photo for p in session.query(ProductPhoto).filter_by(product_id=product.id).all()}
         for idx, p_file in enumerate(sorted(photos)):
             web_path = f"/static/catalog/{folder_key}/{p_dir.relative_to(base_path)}/{p_file.name}"
             if web_path not in existing_photos:
                 new_photo = ProductPhoto(
-                    photo=web_path, 
-                    product_id=product.id,
+                    photo=web_path, product_id=product.id,
                     is_main=(idx == 0),
                     dependency=ProductPhotoDepEnum.COLOR,
-                    color_id=def_color.id, 
-                    size_id=def_size.id,
-                    with_glass=glass_v # Записуємо назву скла або None
+                    color_id=def_color.id, size_id=def_size.id,
+                    with_glass=glass_v
                 )
                 session.add(new_photo)
                 STATS['import_details'][cat_name]['photos_added'] += 1
@@ -201,32 +202,22 @@ def main():
     load_dotenv('.env')
     db_url = os.getenv('DATABASE_URL')
     if not db_url:
-        print("❌ Помилка: DATABASE_URL не знайдено")
+        print("❌ DATABASE_URL не знайдено")
         return
     
     db_url = db_url.replace('postgresql://', 'postgresql+psycopg2://')
     engine = create_engine(db_url, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine)
     
-    print("🚀 СТАРТ УНІВЕРСАЛЬНОГО ІМПОРТУ (V2)")
-    print("=" * 60)
-    
     with SessionLocal() as session:
         try:
             analyze_and_import(session, "Двері")
             analyze_and_import(session, "Лиштви")
             session.commit()
-            
-            print("\n" + "=" * 60)
-            print("📊 ПІДСУМКОВА СТАТИСТИКА")
-            for cat, data in STATS['import_details'].items():
-                print(f"📦 {cat}: {data['products_added']} нових, {data['products_updated']} оновлено, {data['photos_added']} фото")
-            print("=" * 60)
-            print("🎉 ВСЕ УСПІШНО ЗАВЕРШЕНО!")
-            
+            print("\n✅ УСПІШНО ЗАВЕРШЕНО")
         except Exception as e:
             session.rollback()
-            print(f"\n❌ КРИТИЧНА ПОМИЛКА: {e}")
+            print(f"\n❌ ПОМИЛКА: {e}")
             traceback.print_exc()
 
 if __name__ == "__main__":
