@@ -32,7 +32,7 @@ STATS = {
     })
 }
 
-# --- 1. ПІДГОТОВКА БАЗИ ДАНИХ (СИНХРОНІЗАЦІЯ) ---
+# --- 1. ПІДГОТОВКА БАЗИ ДАНИХ ---
 
 def sync_references(session: Session, category: Category):
     """Гарантує наявність базових розмірів та кольорів для категорії"""
@@ -52,10 +52,8 @@ def sync_references(session: Session, category: Category):
             session.flush()
         db_sizes.append(size)
     
-    # Прив'язуємо дозволені розміри до категорії (Many-to-Many)
     category.allowed_sizes = db_sizes
     
-    # Створюємо базовий колір
     default_color = session.query(ProductColor).filter_by(name="Стандарт").first()
     if not default_color:
         default_color = ProductColor(name="Стандарт")
@@ -69,32 +67,53 @@ def sync_references(session: Session, category: Category):
 def extract_docx_content(file_path):
     """Зчитує текст, визначає скло, орієнтацію та покриття"""
     if not DOCX_AVAILABLE or not file_path.exists():
-        return "Опис відсутній", [{"value": "Опис відсутній"}], None, False, False
+        return "Опис відсутній", [{"value": "Опис відсутній"}], None, False, False, None
 
     try:
         doc = Document(file_path)
         lines = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
         if not lines: 
-            return "Опис порожній", [{"value": "Опис порожній"}], None, False, False
+            return "Опис порожній", [{"value": "Опис порожній"}], None, False, False, None
 
         details = [{"value": line} for line in lines]
         full_text = " ".join(lines).lower()
         
-        has_glass = any(kw in full_text for kw in ['засклена', 'зі склом', 'скління']) and 'без скла' not in full_text
+        # Визначаємо покриття
+        covering = next((line for line in lines if any(kw in line.lower() for kw in ['пвх', 'шпон', 'ламінат', 'дуб'])), None)
+        
+        # --- ЛОГІКА СКЛА ---
+        # Шукаємо рядок про скло
+        glass_line = next((line for line in lines if any(kw in line.lower() for kw in ['скло', 'скління', 'засклена'])), None)
+        
+        has_glass = False
+        glass_value = None
+        
+        if glass_line:
+            if "без скла" in glass_line.lower():
+                has_glass = False
+                glass_value = None # Якщо "Без Скла" -> null
+            else:
+                has_glass = True
+                glass_value = glass_line # Якщо назва скла є -> передаємо значення
+        
         has_orient = any(kw in full_text for kw in ['праве', 'ліве', 'правий', 'лівий'])
         
-        # Пошук покриття
-        covering = next((line for line in lines if any(kw in line.lower() for kw in ['пвх', 'шпон', 'ламінат', 'дуб'])), None)
-        summary = " • ".join(lines[:3]) if len(lines) >= 3 else " • ".join(lines)
+        # --- ФОРМУВАННЯ SUMMARY (без покриття) ---
+        # Беремо перші 2 рядки, ігноруючи рядок з покриттям
+        summary_parts = []
+        for line in lines[:2]:
+            if covering and line == covering:
+                continue
+            summary_parts.append(line)
+        summary = " • ".join(summary_parts)
         
-        return summary, details, covering, has_glass, has_orient
+        return summary, details, covering, has_glass, has_orient, glass_value
     except Exception:
-        return "Помилка файлу", [{"value": "Помилка читання"}], None, False, False
+        return "Помилка файлу", [{"value": "Помилка читання"}], None, False, False, None
 
 # --- 3. АНАЛІЗ ТА ІМПОРТ ---
 
 def analyze_and_import(session: Session, cat_name: str):
-    """Універсальна функція для будь-якої категорії"""
     folder_key = "door" if cat_name == "Двері" else "mouldings"
     base_path = Path(f"static/catalog/{folder_key}")
     
@@ -102,42 +121,38 @@ def analyze_and_import(session: Session, cat_name: str):
         print(f"❌ Шлях не знайдено: {base_path}")
         return
 
-    # Отримуємо/створюємо категорію
     cat = session.query(Category).filter_by(name=cat_name).first()
     if not cat:
         cat = Category(name=cat_name, is_glass_available=(cat_name == "Двері"))
         session.add(cat)
         session.flush()
     
-    # Готуємо довідники
     def_size, def_color = sync_references(session, cat)
 
     print(f"\n🔍 АНАЛІЗ ТА ІМПОРТ: {cat_name.upper()}")
     print("-" * 60)
 
-    # Збираємо всі папки з товарами
     product_dirs = []
     if cat_name == "Двері":
-        # Двері мають вкладеність: Колекція -> Товар
         for class_dir in sorted(base_path.iterdir()):
             if class_dir.is_dir():
                 for p_dir in sorted(class_dir.iterdir()):
                     if p_dir.is_dir():
                         product_dirs.append((class_dir.name, p_dir))
     else:
-        # Лиштви лежать прямо в папці або в підпапках
         for p_dir in sorted(base_path.iterdir()):
             if p_dir.is_dir():
                 product_dirs.append(("Базова", p_dir))
 
     for class_name, p_dir in product_dirs:
-        # Перевірка наявності контенту
         photos = list(p_dir.glob('*.webp')) + list(p_dir.glob('*.jpg')) + list(p_dir.glob('*.png'))
         if not photos and not (p_dir / "description.docx").exists():
             continue
 
         STATS['import_details'][cat_name]['folders'] += 1
-        summary, details, cover, glass, orient = extract_docx_content(p_dir / "description.docx")
+        
+        # Отримуємо оновлені дані з docx
+        summary, details, cover, glass, orient, glass_v = extract_docx_content(p_dir / "description.docx")
         
         sku = f"{folder_key[:3]}-{class_name}-{p_dir.name}".upper().replace(' ', '-')
         product = session.query(Product).filter_by(sku=sku).first()
@@ -169,10 +184,13 @@ def analyze_and_import(session: Session, cat_name: str):
             web_path = f"/static/catalog/{folder_key}/{p_dir.relative_to(base_path)}/{p_file.name}"
             if web_path not in existing_photos:
                 new_photo = ProductPhoto(
-                    photo=web_path, product_id=product.id,
+                    photo=web_path, 
+                    product_id=product.id,
                     is_main=(idx == 0),
                     dependency=ProductPhotoDepEnum.COLOR,
-                    color_id=def_color.id, size_id=def_size.id
+                    color_id=def_color.id, 
+                    size_id=def_size.id,
+                    with_glass=glass_v # Записуємо назву скла або None
                 )
                 session.add(new_photo)
                 STATS['import_details'][cat_name]['photos_added'] += 1
@@ -190,20 +208,17 @@ def main():
     engine = create_engine(db_url, pool_pre_ping=True)
     SessionLocal = sessionmaker(bind=engine)
     
-    print("🚀 СТАРТ УНІВЕРСАЛЬНОГО ІМПОРТУ")
+    print("🚀 СТАРТ УНІВЕРСАЛЬНОГО ІМПОРТУ (V2)")
     print("=" * 60)
     
     with SessionLocal() as session:
         try:
             analyze_and_import(session, "Двері")
             analyze_and_import(session, "Лиштви")
-            
             session.commit()
             
-            # ФІНАЛЬНИЙ ЗВІТ
             print("\n" + "=" * 60)
             print("📊 ПІДСУМКОВА СТАТИСТИКА")
-            print("-" * 60)
             for cat, data in STATS['import_details'].items():
                 print(f"📦 {cat}: {data['products_added']} нових, {data['products_updated']} оновлено, {data['photos_added']} фото")
             print("=" * 60)
